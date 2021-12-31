@@ -47,5 +47,14 @@ module AsyncScheduler
     # The suggested pattern is to implement the main event loop in the close method.
     def close
     end
+
+    def io_wait
+    end
+
+    def io_read
+    end
+
+    def io_write(_, _, _)
+    end
   end
 end
