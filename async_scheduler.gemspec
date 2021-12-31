@@ -1,24 +1,24 @@
 # frozen_string_literal: true
 
-require_relative "lib/async_std_scheduler/version"
+require_relative "lib/async_scheduler/version"
 
 Gem::Specification.new do |spec|
-  spec.name = "async_std_scheduler"
-  spec.version = AsyncStdScheduler::VERSION
+  spec.name = "async_scheduler"
+  spec.version = AsyncScheduler::VERSION
   spec.authors = ["kudojp"]
   spec.email = ["heyjudejudejude1968@gmail.com"]
 
   spec.summary = "Asynchronous task scheduler in Ruby"
   spec.description = "This is a task scheduler which implements the FiberScheduler interface"
-  spec.homepage = "https://github.com/kudojp/async_std_scheduler"
+  spec.homepage = "https://github.com/kudojp/async_scheduler"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 2.6.0"
 
   spec.metadata["allowed_push_host"] = "TODO: Set to your gem server 'https://example.com'"
 
   spec.metadata["homepage_uri"] = spec.homepage
-  spec.metadata["source_code_uri"] = "https://github.com/kudojp/async_std_scheduler"
-  spec.metadata["changelog_uri"] = "https://github.com/kudojp/async_std_scheduler/blob/main/CHANGELOG.md"
+  spec.metadata["source_code_uri"] = "https://github.com/kudojp/async_scheduler"
+  spec.metadata["changelog_uri"] = "https://github.com/kudojp/async_scheduler/blob/main/CHANGELOG.md"
 
   # Specify which files should be added to the gem when it is released.
   # The `git ls-files -z` loads the files in the RubyGem that have been added into git.

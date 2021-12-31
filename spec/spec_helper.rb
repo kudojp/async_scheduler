@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "async_std_scheduler"
+require "async_scheduler"
 
 RSpec.configure do |config|
   # Enable flags like --only-failures and --next-failure

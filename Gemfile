@@ -2,7 +2,7 @@
 
 source "https://rubygems.org"
 
-# Specify your gem's dependencies in async_std_scheduler.gemspec
+# Specify your gem's dependencies in async_scheduler.gemspec
 gemspec
 
 gem "rake", "~> 13.0"

@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-RSpec.describe AsyncStdScheduler do
+RSpec.describe AsyncScheduler do
   it "has a version number" do
-    expect(AsyncStdScheduler::VERSION).not_to be nil
+    expect(AsyncScheduler::VERSION).not_to be nil
   end
 
   it "does something useful" do
