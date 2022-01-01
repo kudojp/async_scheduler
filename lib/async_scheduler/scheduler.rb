@@ -32,6 +32,7 @@ module AsyncScheduler
     # blocker is what was awaited for, but it is informational only (for debugging and logging),
     # and it is not guaranteed to be the same value as the blocker for block.
     def unblock(blocker, fiber)
+      fiber.resume
     end
 
     # Invoked by Kernel#sleep and Mutex#sleep and is expected to provide an implementation of sleeping in a non-blocking way.
@@ -62,6 +63,13 @@ module AsyncScheduler
     # Called when the current thread exits. The scheduler is expected to implement this method in order to allow all waiting fibers to finalize their execution.
     # The suggested pattern is to implement the main event loop in the close method.
     def close
+      while !@waitings.empty? || @blocking_cnt > 0
+        first_fiber, first_timeout = @waitings.min_by{|fiber, timeout| timeout}
+        if first_timeout <= Time.now
+          unblock(:_closed_fiber, first_fiber) # TODO: pass a good identifier of the fiber
+          @waitings.delete(first_fiber)
+        end
+      end
     end
 
     def io_wait
