@@ -66,12 +66,18 @@ module AsyncScheduler
     # Called when the current thread exits. The scheduler is expected to implement this method in order to allow all waiting fibers to finalize their execution.
     # The suggested pattern is to implement the main event loop in the close method.
     def close
-      while !@waitings.empty? || @blocking_cnt > 0
+      while !@waitings.empty? || @blocking_cnt > 0 || !@output_waitings.empty?
         while !@waitings.empty?
           first_fiber, first_timeout = @waitings.min_by{|fiber, timeout| timeout}
           break if Time.now < first_timeout
           unblock(:_closed_fiber, first_fiber) # TODO: pass a good named identifier of the fiber
           @waitings.delete(first_fiber)
+        end
+
+        while !@output_waitings.empty?
+          _input_ready, output_ready = IO.select([], @output_waitings.keys)
+          fiber_non_blocking = @output_waitings[output_ready]
+          fiber_non_blocking.resume
         end
       end
     end
