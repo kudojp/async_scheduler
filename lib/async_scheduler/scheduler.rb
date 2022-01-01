@@ -6,7 +6,7 @@ module AsyncScheduler
       # (key, value) = (Fiber object, timeout)
       @waitings = {}
       # (key, value) = (blocking io, Fiber object)
-      @input_waitings = {}
+      # @input_waitings = {} # TODO: uncomment this line in an appropriate PR.
       @output_waitings = {}
       # number of blockers which blocks for good. e.g. sleeping without the timeout.
       @blocking_cnt = 0
