@@ -79,7 +79,16 @@ module AsyncScheduler
     def io_read
     end
 
-    def io_write(_, _, _)
+    # Invoked by IO#write to write length bytes to io from from a specified buffer (see IO::Buffer).
+    # The length argument is the “(minimum) length to be written”.
+    # If the IO buffer size is 8KiB, but the length specified is 1024 (1KiB), at most 8KiB will be written, but at least 1KiB will be.
+    # Generally, the only case where less data than length will be written is if there is an error writing the data.
+
+    # Specifying a length of 0 is valid and means try writing at least once, as much data as possible.
+    # Suggested implementation should try to write to io in a non-blocking manner and call io_wait if the io is not ready (which will yield control to other fibers).
+    # See IO::Buffer for an interface available to get data from buffer efficiently.
+    # Expected to return number of bytes written, or, in case of an error, -errno (negated number corresponding to system's error code).
+    def io_write(io, buffer, length) # returns: written length or -errnoclick to toggle source
     end
   end
 end
