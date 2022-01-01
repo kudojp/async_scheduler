@@ -5,7 +5,7 @@ module AsyncScheduler
     def initialize
       # (key, value) = (Fiber object, timeout)
       @waitings = {}
-      # number of blockers which blocks for good.
+      # number of blockers which blocks for good. e.g. sleeping without the timeout.
       @blocking_cnt = 0
     end
 
