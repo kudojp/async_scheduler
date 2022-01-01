@@ -5,6 +5,8 @@ module AsyncScheduler
     def initialize
       # (key, value) = (Fiber object, timeout)
       @waitings = {}
+      # number of blockers which blocks for good.
+      @blocking_cnt = 0
     end
 
 
@@ -21,7 +23,7 @@ module AsyncScheduler
     # blocker is what we are waiting on, informational only (for debugging and logging). There are no guarantee about its value.
     # Expected to return boolean, specifying whether the blocking operation was successful or not.
     def block(blocker, timeout = nil)
-      @waiting[Fiber.current] = timeout # timeout=nil signifies that it sleeps eternally.
+      @waiting[Fiber.current] = timeout
       return true
     end
 
@@ -36,8 +38,12 @@ module AsyncScheduler
     # Implementation might register the current fiber in some list of “which fiber wait until what moment”,
     # call Fiber.yield to pass control, and then in close resume the fibers whose wait period has elapsed.
     def kernel_sleep(duration = nil)
-      block(:kernel_sleep, Time.now + duration)
-      Fiber.yield
+      if duration
+        block(:kernel_sleep, Time.now + duration)
+        Fiber.yield
+      else
+        @blocking_cnt += 1
+      end
     end
 
     # Invoked by Timeout.timeout to execute the given block within the given duration.
