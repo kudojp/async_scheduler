@@ -2,6 +2,14 @@ module AsyncScheduler
   # This class implements Fiber::SchedulerInterface.
   # See https://ruby-doc.org/core-3.1.0/Fiber/SchedulerInterface.html for details.
   class Scheduler
+    def initialize
+      # (key, value) = (Fiber object, timeout)
+      @waitings = {}
+      # number of blockers which blocks for good. e.g. sleeping without the timeout.
+      @blocking_cnt = 0
+    end
+
+
     # Implementation of the Fiber.schedule.
     # The method is expected to immediately run the given block of code in a separate non-blocking fiber,
     # and to return that Fiber.
@@ -15,6 +23,8 @@ module AsyncScheduler
     # blocker is what we are waiting on, informational only (for debugging and logging). There are no guarantee about its value.
     # Expected to return boolean, specifying whether the blocking operation was successful or not.
     def block(blocker, timeout = nil)
+      @waitings[Fiber.current] = timeout
+      return true
     end
 
     # Invoked to wake up Fiber previously blocked with block (for example, Mutex#lock calls block and Mutex#unlock calls unblock).
@@ -22,12 +32,19 @@ module AsyncScheduler
     # blocker is what was awaited for, but it is informational only (for debugging and logging),
     # and it is not guaranteed to be the same value as the blocker for block.
     def unblock(blocker, fiber)
+      fiber.resume
     end
 
     # Invoked by Kernel#sleep and Mutex#sleep and is expected to provide an implementation of sleeping in a non-blocking way.
     # Implementation might register the current fiber in some list of “which fiber wait until what moment”,
     # call Fiber.yield to pass control, and then in close resume the fibers whose wait period has elapsed.
     def kernel_sleep(duration = nil)
+      if duration
+        block(:kernel_sleep, Time.now + duration)
+        Fiber.yield
+      else
+        @blocking_cnt += 1
+      end
     end
 
     # Invoked by Timeout.timeout to execute the given block within the given duration.
@@ -46,6 +63,13 @@ module AsyncScheduler
     # Called when the current thread exits. The scheduler is expected to implement this method in order to allow all waiting fibers to finalize their execution.
     # The suggested pattern is to implement the main event loop in the close method.
     def close
+      while !@waitings.empty? || @blocking_cnt > 0
+        first_fiber, first_timeout = @waitings.min_by{|fiber, timeout| timeout}
+        if first_timeout <= Time.now
+          unblock(:_closed_fiber, first_fiber) # TODO: pass a good named identifier of the fiber
+          @waitings.delete(first_fiber)
+        end
+      end
     end
 
     def io_wait
