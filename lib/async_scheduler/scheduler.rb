@@ -23,7 +23,7 @@ module AsyncScheduler
     # blocker is what we are waiting on, informational only (for debugging and logging). There are no guarantee about its value.
     # Expected to return boolean, specifying whether the blocking operation was successful or not.
     def block(blocker, timeout = nil)
-      @waiting[Fiber.current] = timeout
+      @waitings[Fiber.current] = timeout
       return true
     end
 
