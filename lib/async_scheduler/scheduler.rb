@@ -117,7 +117,12 @@ module AsyncScheduler
     # See IO::Buffer for an interface available to get data from buffer efficiently.
     # Expected to return number of bytes written, or, in case of an error, -errno (negated number corresponding to system's error code).
     def io_write(io, buffer, length) # returns: written length or -errnoclick to toggle source
-      result = io.write_nonblock(buffer, exception: false)
+      begin
+        result = io.write_nonblock(buffer, exception: false)
+      rescue SystemCallError => e
+        return -e.errno
+      end
+
       case result
       when :wait_writable
         # TODO: this may not write all bytes in buffer to io.
