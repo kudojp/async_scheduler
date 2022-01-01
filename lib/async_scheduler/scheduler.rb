@@ -79,8 +79,10 @@ module AsyncScheduler
         # the scheduler should stop `select` system call, and execute the fiber which is not blocked any more.
         while !@output_waitings.empty?
           _input_ready, output_ready = IO.select([], @output_waitings.keys)
-          fiber_non_blocking = @output_waitings.delete(output_ready)
-          fiber_non_blocking.resume
+          if !output_ready.nil?
+            fiber_non_blocking = @output_waitings.delete(output_ready)
+            fiber_non_blocking.resume
+          end
         end
       end
     end
