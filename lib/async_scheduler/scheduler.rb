@@ -6,7 +6,7 @@ module AsyncScheduler
       # (key, value) = (Fiber object, timeout)
       @waitings = {}
       # (key, value) = (blocking io, Fiber object)
-      # @input_waitings = {} # TODO: uncomment this line in an appropriate PR.
+      @input_waitings = {}
       @output_waitings = {}
       # number of blockers which blocks for good. e.g. sleeping without the timeout.
       @blocking_cnt = 0
@@ -99,10 +99,9 @@ module AsyncScheduler
       # TODO: use timeout parameter
       # TODO?: Expected to return the subset of events that are ready immediately.
 
-      # TODO: uncomment this lines in an appropriate PR.
-      # if events & IO::READABLE == IO::READABLE
-      #   @input_waitings[io] = Fiber.current
-      # end
+      if events & IO::READABLE == IO::READABLE
+        @input_waitings[io] = Fiber.current
+      end
 
       if events & IO::WRITABLE == IO::WRITABLE
         @output_waitings[io] = Fiber.current
