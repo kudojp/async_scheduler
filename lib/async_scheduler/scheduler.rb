@@ -5,6 +5,9 @@ module AsyncScheduler
     def initialize
       # (key, value) = (Fiber object, timeout)
       @waitings = {}
+      # (key, value) = (blocking io, Fiber object)
+      # @input_waitings = {} # TODO: uncomment this line in an appropriate PR.
+      @output_waitings = {}
       # number of blockers which blocks for good. e.g. sleeping without the timeout.
       @blocking_cnt = 0
     end
@@ -63,23 +66,78 @@ module AsyncScheduler
     # Called when the current thread exits. The scheduler is expected to implement this method in order to allow all waiting fibers to finalize their execution.
     # The suggested pattern is to implement the main event loop in the close method.
     def close
-      while !@waitings.empty? || @blocking_cnt > 0
+      while !@waitings.empty? || @blocking_cnt > 0 || !@output_waitings.empty?
         while !@waitings.empty?
           first_fiber, first_timeout = @waitings.min_by{|fiber, timeout| timeout}
           break if Time.now < first_timeout
           unblock(:_closed_fiber, first_fiber) # TODO: pass a good named identifier of the fiber
           @waitings.delete(first_fiber)
         end
+
+        # TODO: This is not necessarily an efficient way.
+        # When timeout of a blocker in @waitings has come,
+        # the scheduler should stop `select` system call, and execute the fiber which is not blocked any more.
+        while !@output_waitings.empty?
+          # TODO: using select syscall is not efficient. Use epoll/kqueue here.
+          _input_ready, output_ready = IO.select([], @output_waitings.keys)
+          if !output_ready.nil?
+            fiber_non_blocking = @output_waitings.delete(output_ready)
+            fiber_non_blocking.resume
+          end
+        end
       end
     end
 
-    def io_wait
+
+    # Invoked by IO#wait, IO#wait_readable, IO#wait_writable to ask whether the specified descriptor is ready for specified events within the specified timeout.
+    # events is a bit mask of IO::READABLE, IO::WRITABLE, and IO::PRIORITY.
+
+    # Suggested implementation should register which Fiber is waiting for which resources and immediately calling Fiber.yield to pass control to other fibers.
+    # Then, in the close method, the scheduler might dispatch all the I/O resources to fibers waiting for it.
+    # Expected to return the subset of events that are ready immediately.
+    def io_wait(io, events, _timeout)
+      # TODO: use timeout parameter
+      # TODO?: Expected to return the subset of events that are ready immediately.
+
+      # TODO: uncomment this lines in an appropriate PR.
+      # if events & IO::READABLE == IO::READABLE
+      #   @input_waitings[io] = Fiber.current
+      # end
+
+      if events & IO::WRITABLE == IO::WRITABLE
+        @output_waitings[io] = Fiber.current
+      end
+
+      Fiber.yield
     end
 
-    def io_read
+    def io_read(io, buffer, length) # read length or -errno
     end
 
-    def io_write(_, _, _)
+    # Invoked by IO#write to write length bytes to io from from a specified buffer (see IO::Buffer).
+    # The length argument is the “(minimum) length to be written”.
+    # If the IO buffer size is 8KiB, but the length specified is 1024 (1KiB), at most 8KiB will be written, but at least 1KiB will be.
+    # Generally, the only case where less data than length will be written is if there is an error writing the data.
+
+    # Specifying a length of 0 is valid and means try writing at least once, as much data as possible.
+    # Suggested implementation should try to write to io in a non-blocking manner and call io_wait if the io is not ready (which will yield control to other fibers).
+    # See IO::Buffer for an interface available to get data from buffer efficiently.
+    # Expected to return number of bytes written, or, in case of an error, -errno (negated number corresponding to system's error code).
+    def io_write(io, buffer, length) # returns: written length or -errnoclick to toggle source
+      begin
+        result = io.write_nonblock(buffer, exception: false)
+      rescue SystemCallError => e
+        return -e.errno
+      end
+
+      case result
+      when :wait_writable
+        # TODO: this may not write all bytes in buffer to io.
+        # See: https://docs.ruby-lang.org/ja/latest/class/IO.html#I_WRITE_NONBLOCK
+        io_wait(io, IO::WRITABLE, nil)
+      else
+        return result
+      end
     end
   end
 end
