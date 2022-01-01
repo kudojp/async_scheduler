@@ -2,6 +2,15 @@ module AsyncScheduler
   # This class implements Fiber::SchedulerInterface.
   # See https://ruby-doc.org/core-3.1.0/Fiber/SchedulerInterface.html for details.
   class Scheduler
+    # Implementation of the Fiber.schedule.
+    # The method is expected to immediately run the given block of code in a separate non-blocking fiber,
+    # and to return that Fiber.
+    def fiber(&block)
+      fiber = Fiber.new(blocking: false, &block)
+      fiber.resume
+      fiber
+    end
+
     # Invoked by methods like Thread.join, and by Mutex, to signify that current Fiber is blocked until further notice (e.g. unblock) or until timeout has elapsed.
     # blocker is what we are waiting on, informational only (for debugging and logging). There are no guarantee about its value.
     # Expected to return boolean, specifying whether the blocking operation was successful or not.
@@ -13,15 +22,6 @@ module AsyncScheduler
     # blocker is what was awaited for, but it is informational only (for debugging and logging),
     # and it is not guaranteed to be the same value as the blocker for block.
     def unblock(blocker, fiber)
-    end
-
-    # Implementation of the Fiber.schedule.
-    # The method is expected to immediately run the given block of code in a separate non-blocking fiber,
-    # and to return that Fiber.
-    def fiber(&block)
-      fiber = Fiber.new(blocking: false, &block)
-      fiber.resume
-      fiber
     end
 
     # Invoked by Kernel#sleep and Mutex#sleep and is expected to provide an implementation of sleeping in a non-blocking way.
