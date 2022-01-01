@@ -2,12 +2,12 @@ module AsyncScheduler
   # This class implements Fiber::SchedulerInterface.
   # See https://ruby-doc.org/core-3.1.0/Fiber/SchedulerInterface.html for details.
   class Scheduler
-    READ
     def initialize
       # (key, value) = (Fiber object, timeout)
       @waitings = {}
-      # (key, value) = (Fiber object, (io, events))
-      @io_waitings = {}
+      # (key, value) = (blocking io, Fiber object)
+      @input_waitings = {}
+      @output_waitings = {}
       # number of blockers which blocks for good. e.g. sleeping without the timeout.
       @blocking_cnt = 0
     end
@@ -85,7 +85,16 @@ module AsyncScheduler
     # Expected to return the subset of events that are ready immediately.
     def io_wait(io, events, _timeout)
       # TODO: use timeout parameter
-      @io_waitings[Fiber.current] = (io, events)
+      # TODO?: Expected to return the subset of events that are ready immediately.
+
+      if events & IO::READABLE == IO::READABLE
+        @input_waitings[io] = Fiber.current
+      end
+
+      if events & IO::WRITABLE == IO::WRITABLE
+        @output_waitings[io] = Fiber.current
+      end
+
       Fiber.yield
     end
 
@@ -102,13 +111,11 @@ module AsyncScheduler
     # See IO::Buffer for an interface available to get data from buffer efficiently.
     # Expected to return number of bytes written, or, in case of an error, -errno (negated number corresponding to system's error code).
     def io_write(io, buffer, length) # returns: written length or -errnoclick to toggle source
-
-      # TODO: this may not write all bytes in buffer to io.
-      # See: https://docs.ruby-lang.org/ja/latest/class/IO.html#I_WRITE_NONBLOCK
       result = io.write_nonblock(buffer, exception: false)
-
       case result
       when :wait_writable
+        # TODO: this may not write all bytes in buffer to io.
+        # See: https://docs.ruby-lang.org/ja/latest/class/IO.html#I_WRITE_NONBLOCK
         io_wait(io, IO::WRITABLE, nil)
       else
         return result
