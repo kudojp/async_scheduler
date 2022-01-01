@@ -120,6 +120,20 @@ module AsyncScheduler
     # See IO::Buffer for an interface available to return data.
     # Expected to return number of bytes read, or, in case of an error, -errno (negated number corresponding to system's error code).
     def io_read(io, buffer, length) # read length or -errno
+      begin
+        result = io.read_nonblock(length, buffer, exception: false)
+      rescue SystemCallError => e
+        return -e.errno
+      end
+
+      case result
+      when :wait_readable
+        # TODO: this may not read all bytes from input.
+        # See: https://docs.ruby-lang.org/ja/latest/method/IO/i/read_nonblock.html
+        io_wait(io, IO::READABLE, nil)
+      else
+        return result
+      end
     end
 
     # Invoked by IO#write to write length bytes to io from from a specified buffer (see IO::Buffer).
