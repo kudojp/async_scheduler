@@ -73,6 +73,13 @@ module AsyncScheduler
       end
     end
 
+
+    # Invoked by IO#wait, IO#wait_readable, IO#wait_writable to ask whether the specified descriptor is ready for specified events within the specified timeout.
+    # events is a bit mask of IO::READABLE, IO::WRITABLE, and IO::PRIORITY.
+
+    # Suggested implementation should register which Fiber is waiting for which resources and immediately calling Fiber.yield to pass control to other fibers.
+    # Then, in the close method, the scheduler might dispatch all the I/O resources to fibers waiting for it.
+    # Expected to return the subset of events that are ready immediately.
     def io_wait
     end
 
