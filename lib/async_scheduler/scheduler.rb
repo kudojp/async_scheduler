@@ -76,7 +76,7 @@ module AsyncScheduler
 
         while !@output_waitings.empty?
           _input_ready, output_ready = IO.select([], @output_waitings.keys)
-          fiber_non_blocking = @output_waitings[output_ready]
+          fiber_non_blocking = @output_waitings.delete(output_ready)
           fiber_non_blocking.resume
         end
       end
