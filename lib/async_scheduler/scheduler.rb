@@ -74,6 +74,9 @@ module AsyncScheduler
           @waitings.delete(first_fiber)
         end
 
+        # TODO: This is not necessarily an efficient way.
+        # When timeout of a blocker in @waitings has come,
+        # the scheduler should stop `select` system call, and execute the fiber which is not blocked any more.
         while !@output_waitings.empty?
           _input_ready, output_ready = IO.select([], @output_waitings.keys)
           fiber_non_blocking = @output_waitings.delete(output_ready)
