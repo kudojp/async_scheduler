@@ -98,9 +98,10 @@ module AsyncScheduler
       # TODO: use timeout parameter
       # TODO?: Expected to return the subset of events that are ready immediately.
 
-      if events & IO::READABLE == IO::READABLE
-        @input_waitings[io] = Fiber.current
-      end
+      # TODO: uncomment this lines in an appropriate PR.
+      # if events & IO::READABLE == IO::READABLE
+      #   @input_waitings[io] = Fiber.current
+      # end
 
       if events & IO::WRITABLE == IO::WRITABLE
         @output_waitings[io] = Fiber.current
