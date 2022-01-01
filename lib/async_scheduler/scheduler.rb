@@ -2,6 +2,12 @@ module AsyncScheduler
   # This class implements Fiber::SchedulerInterface.
   # See https://ruby-doc.org/core-3.1.0/Fiber/SchedulerInterface.html for details.
   class Scheduler
+    def initialize
+      # (key, value) = (Fiber object, timeout)
+      @waitings = {}
+    end
+
+
     # Implementation of the Fiber.schedule.
     # The method is expected to immediately run the given block of code in a separate non-blocking fiber,
     # and to return that Fiber.
