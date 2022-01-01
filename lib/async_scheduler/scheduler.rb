@@ -80,10 +80,10 @@ module AsyncScheduler
     # Suggested implementation should register which Fiber is waiting for which resources and immediately calling Fiber.yield to pass control to other fibers.
     # Then, in the close method, the scheduler might dispatch all the I/O resources to fibers waiting for it.
     # Expected to return the subset of events that are ready immediately.
-    def io_wait
+    def io_wait(io, events, timeout)
     end
 
-    def io_read
+    def io_read(io, buffer, length) # read length or -errno
     end
 
     # Invoked by IO#write to write length bytes to io from from a specified buffer (see IO::Buffer).
