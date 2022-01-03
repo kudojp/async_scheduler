@@ -124,20 +124,29 @@ module AsyncScheduler
     # See IO::Buffer for an interface available to get data from buffer efficiently.
     # Expected to return number of bytes written, or, in case of an error, -errno (negated number corresponding to system's error code).
     def io_write(io, buffer, length) # returns: written length or -errnoclick to toggle source
-      begin
-        result = io.write_nonblock(buffer, exception: false)
-      rescue SystemCallError => e
-        return -e.errno
-      end
+      offset = 0
 
-      case result
-      when :wait_writable
-        # TODO: this may not write all bytes in buffer to io.
-        # See: https://docs.ruby-lang.org/ja/latest/class/IO.html#I_WRITE_NONBLOCK
-        io_wait(io, IO::WRITABLE, nil)
-      else
-        return result
+      while offset < length || length == 0
+        begin
+          write_nonblock = Fiber.new(blocking: true) do
+            io.write_nonblock(buffer, exception: false)
+          end
+          result = write_nonblock.resume
+        rescue SystemCallError => e
+          return -e.errno
+        end
+
+        case result
+        when :wait_writable
+          # TODO: this may not write all bytes in buffer to io.
+          # See: https://docs.ruby-lang.org/ja/latest/class/IO.html#I_WRITE_NONBLOCK
+          io_wait(io, IO::WRITABLE, nil)
+        else
+          offset += result
+          break if length == 0 # Specification says it tries writing at least once if length == 0
+        end
       end
+      return offset
     end
   end
 end
