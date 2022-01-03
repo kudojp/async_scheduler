@@ -132,7 +132,7 @@ module AsyncScheduler
         io.read_nonblock(buffer.size, read_string, exception: false)
       end
       begin
-        # This fiber is called only here.
+        # This fiber is resumed only here.
         result = read_nonblock.resume
       rescue SystemCallError => e
         return -e.errno
