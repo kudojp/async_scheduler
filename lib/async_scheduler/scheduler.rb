@@ -77,7 +77,7 @@ module AsyncScheduler
         # TODO: This is not necessarily an efficient way.
         # When timeout of a blocker in @waitings has come,
         # the scheduler should stop `select` system call, and execute the fiber which is not blocked any more.
-        while !@output_waitings.empty?
+        while !@output_waitings.empty? || !@input_waitings.empty?
           # TODO: using select syscall is not efficient. Use epoll/kqueue here.
           input_ready, output_ready = IO.select(@input_waitings.keys, @output_waitings.keys)
 
@@ -125,8 +125,15 @@ module AsyncScheduler
     # See IO::Buffer for an interface available to return data.
     # Expected to return number of bytes read, or, in case of an error, -errno (negated number corresponding to system's error code).
     def io_read(io, buffer, length) # read length or -errno
+      read_string = ""
       begin
-        result = io.read_nonblock(length, buffer, exception: false)
+        read_nonblock = Fiber.new(blocking: true) do
+          # AsyncScheduler::Scheduler#io_read is hooked to IO#read_nonblock.
+          # To avoid an infinite call loop, IO#read_nonblock is called inside a Fiber whose blocking=true.
+          io.read_nonblock(buffer.size, read_string, exception: false)
+        end
+        # This fiber is called only here.
+        result = read_nonblock.resume
       rescue SystemCallError => e
         return -e.errno
       end
@@ -137,7 +144,7 @@ module AsyncScheduler
         # See: https://docs.ruby-lang.org/ja/latest/method/IO/i/read_nonblock.html
         io_wait(io, IO::READABLE, nil)
       else
-        return result
+        return buffer.set_string(read_string) # this does not work with `#set_string(result)`
       end
     end
 
