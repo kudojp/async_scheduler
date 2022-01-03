@@ -22,7 +22,6 @@ RSpec.describe AsyncScheduler do
 
     end
     thread.join
-    # This method should take around 3 seconds, not around 9 seconds.
     puts "It took #{Time.now - t} seconds to run three fibers concurrently."
   end
 end
