@@ -124,14 +124,14 @@ module AsyncScheduler
     # Suggested implementation should try to read from io in a non-blocking manner and call io_wait if the io is not ready (which will yield control to other fibers).
     # See IO::Buffer for an interface available to return data.
     # Expected to return number of bytes read, or, in case of an error, -errno (negated number corresponding to system's error code).
-    def io_read(io, buffer, length) # read length or -errno
+    def io_read(io, buffer, length) # return length or -errno
       read_string = ""
+      read_nonblock = Fiber.new(blocking: true) do
+        # AsyncScheduler::Scheduler#io_read is hooked to IO#read_nonblock.
+        # To avoid an infinite call loop, IO#read_nonblock is called inside a Fiber whose blocking=true.
+        io.read_nonblock(buffer.size, read_string, exception: false)
+      end
       begin
-        read_nonblock = Fiber.new(blocking: true) do
-          # AsyncScheduler::Scheduler#io_read is hooked to IO#read_nonblock.
-          # To avoid an infinite call loop, IO#read_nonblock is called inside a Fiber whose blocking=true.
-          io.read_nonblock(buffer.size, read_string, exception: false)
-        end
         # This fiber is called only here.
         result = read_nonblock.resume
       rescue SystemCallError => e
