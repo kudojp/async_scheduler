@@ -127,10 +127,11 @@ module AsyncScheduler
       offset = 0
 
       while offset < length || length == 0
+        write_nonblock = Fiber.new(blocking: true) do
+          io.write_nonblock(buffer, exception: false)
+        end
+
         begin
-          write_nonblock = Fiber.new(blocking: true) do
-            io.write_nonblock(buffer, exception: false)
-          end
           result = write_nonblock.resume
         rescue SystemCallError => e
           return -e.errno
