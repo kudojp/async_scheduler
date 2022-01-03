@@ -1,6 +1,12 @@
 # frozen_string_literal: true
 
 RSpec.describe AsyncScheduler do
+  before do
+    File.delete("./log1.txt")
+    File.delete("./log2.txt")
+    File.delete("./log3.txt")
+  end
+
   it "writes in fibers with AsyncScheduler::Scheduler" do
     t = Time.now
     thread = Thread.new do
@@ -22,7 +28,6 @@ RSpec.describe AsyncScheduler do
 
     end
     thread.join
-    # This method should take around 3 seconds, not around 9 seconds.
     puts "It took #{Time.now - t} seconds to run three fibers concurrently."
   end
 end
