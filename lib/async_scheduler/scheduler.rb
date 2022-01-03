@@ -128,6 +128,10 @@ module AsyncScheduler
 
       while offset < length || length == 0
         write_nonblock = Fiber.new(blocking: true) do
+          # TODO: Investigate if this #write_nonblock method call should be in a non-blocking fiber.
+          # IO#read_nonblock is hooked to Scheduler#io_wait, so it has to be wrapped.
+          # If IO#read_nonblock is hooked to Scheduler#io_read, this method call has to be wrapped too.
+          # ref. https://docs.ruby-lang.org/ja/latest/class/IO.html#I_WRITE_NONBLOCK
           io.write_nonblock(buffer, exception: false)
         end
 
@@ -139,8 +143,6 @@ module AsyncScheduler
 
         case result
         when :wait_writable
-          # TODO: this may not write all bytes in buffer to io.
-          # See: https://docs.ruby-lang.org/ja/latest/class/IO.html#I_WRITE_NONBLOCK
           io_wait(io, IO::WRITABLE, nil)
         else
           offset += result
