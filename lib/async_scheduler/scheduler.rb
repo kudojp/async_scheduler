@@ -126,26 +126,30 @@ module AsyncScheduler
     # Expected to return number of bytes read, or, in case of an error, -errno (negated number corresponding to system's error code).
     def io_read(io, buffer, length) # return length or -errno
       read_string = ""
-      read_nonblock = Fiber.new(blocking: true) do
-        # AsyncScheduler::Scheduler#io_read is hooked to IO#read_nonblock.
-        # To avoid an infinite call loop, IO#read_nonblock is called inside a Fiber whose blocking=true.
-        io.read_nonblock(buffer.size, read_string, exception: false)
-      end
-      begin
-        # This fiber is resumed only here.
-        result = read_nonblock.resume
-      rescue SystemCallError => e
-        return -e.errno
-      end
+      offset = 0
+      while offset < length
+        read_nonblock = Fiber.new(blocking: true) do
+          # AsyncScheduler::Scheduler#io_read is hooked to IO#read_nonblock.
+          # To avoid an infinite call loop, IO#read_nonblock is called inside a Fiber whose blocking=true.
+          # ref. https://docs.ruby-lang.org/ja/latest/method/IO/i/read_nonblock.html
+          io.read_nonblock(buffer.size-offset, read_string, exception: false)
+        end
 
-      case result
-      when :wait_readable
-        # TODO: this may not read all bytes from input.
-        # See: https://docs.ruby-lang.org/ja/latest/method/IO/i/read_nonblock.html
-        io_wait(io, IO::READABLE, nil)
-      else
-        return buffer.set_string(read_string) # this does not work with `#set_string(result)`
+        begin
+          # This fiber is resumed only here.
+          result = read_nonblock.resume
+        rescue SystemCallError => e
+          return -e.errno
+        end
+
+        case result
+        when :wait_readable
+          io_wait(io, IO::READABLE, nil)
+        else
+          offset += buffer.set_string(read_string, offset) # this does not work with `#set_string(result)`
+        end
       end
+      return offset
     end
 
     # Invoked by IO#write to write length bytes to io from from a specified buffer (see IO::Buffer).
