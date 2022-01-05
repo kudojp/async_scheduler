@@ -127,7 +127,7 @@ module AsyncScheduler
     def io_read(io, buffer, length) # return length or -errno
       read_string = ""
       offset = 0
-      while offset < length
+      while offset < length || length == 0
         read_nonblock = Fiber.new(blocking: true) do
           # AsyncScheduler::Scheduler#io_read is hooked to IO#read_nonblock.
           # To avoid an infinite call loop, IO#read_nonblock is called inside a Fiber whose blocking=true.
@@ -147,6 +147,7 @@ module AsyncScheduler
           io_wait(io, IO::READABLE, nil)
         else
           offset += buffer.set_string(read_string, offset) # this does not work with `#set_string(result)`
+          break if length == 0
         end
       end
       return offset
