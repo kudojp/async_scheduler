@@ -176,7 +176,7 @@ module AsyncScheduler
           # IO#read_nonblock is hooked to Scheduler#io_wait, so it has to be wrapped.
           # If IO#read_nonblock is hooked to Scheduler#io_read, this method call has to be wrapped too.
           # ref. https://docs.ruby-lang.org/ja/latest/class/IO.html#I_WRITE_NONBLOCK
-          io.write_nonblock(buffer, exception: false)
+          io.write_nonblock(buffer.get_string(offset), exception: false)
         end
 
         begin
