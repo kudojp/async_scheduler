@@ -77,11 +77,17 @@ module AsyncScheduler
         # TODO: This is not necessarily an efficient way.
         # When timeout of a blocker in @waitings has come,
         # the scheduler should stop `select` system call, and execute the fiber which is not blocked any more.
-        while !@output_waitings.empty?
+        while !@output_waitings.empty?# || !@input_waitings.empty?
           # TODO: using select syscall is not efficient. Use epoll/kqueue here.
-          _input_ready, output_ready = IO.select([], @output_waitings.keys)
-          if !output_ready.nil?
-            fiber_non_blocking = @output_waitings.delete(output_ready)
+          inputs_ready, outputs_ready = IO.select(@input_waitings.keys, @output_waitings.keys)
+
+          # inputs_ready.each do |input|
+          #   fiber_non_blocking = @input_waitings.delete(input)
+          #   fiber_non_blocking.resume
+          # end
+
+          outputs_ready.each do |output|
+            fiber_non_blocking = @output_waitings.delete(output)
             fiber_non_blocking.resume
           end
         end
