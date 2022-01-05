@@ -145,6 +145,9 @@ module AsyncScheduler
         case result
         when :wait_readable
           io_wait(io, IO::READABLE, nil)
+        when nil # when reaching EOF
+          # TODO: Investigate if it is expected to break here.
+          break
         else
           offset += buffer.set_string(read_string, offset) # this does not work with `#set_string(result)`
           break if length == 0
