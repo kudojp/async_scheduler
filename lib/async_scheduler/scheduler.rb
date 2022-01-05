@@ -170,7 +170,7 @@ module AsyncScheduler
     def io_write(io, buffer, length) # returns: written length or -errnoclick to toggle source
       offset = 0
 
-      while offset <= length || length == 0
+      while offset < length || length == 0
         write_nonblock = Fiber.new(blocking: true) do
           # TODO: Investigate if this #write_nonblock method call should be in a non-blocking fiber.
           # IO#read_nonblock is hooked to Scheduler#io_wait, so it has to be wrapped.
