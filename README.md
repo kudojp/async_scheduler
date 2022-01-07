@@ -1,4 +1,5 @@
-WIP. Sorry for the mess.
+WIP. Sorry for the mess. This repo will be tidied up after finishing implementation.
+
 See: https://github.com/kudojp/async_scheduler/blob/main/lib/async_scheduler/scheduler.rb
 
 
