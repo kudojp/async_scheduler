@@ -6,7 +6,7 @@ module AsyncScheduler
       # (key, value) = (Fiber object, timeout)
       @waitings = {}
       # (key, value) = (blocking io, Fiber object)
-      # @input_waitings = {} # TODO: uncomment this line in an appropriate PR.
+      @input_waitings = {}
       @output_waitings = {}
       # number of blockers which blocks for good. e.g. sleeping without the timeout.
       @blocking_cnt = 0
@@ -66,7 +66,7 @@ module AsyncScheduler
     # Called when the current thread exits. The scheduler is expected to implement this method in order to allow all waiting fibers to finalize their execution.
     # The suggested pattern is to implement the main event loop in the close method.
     def close
-      while !@waitings.empty? || @blocking_cnt > 0 || !@output_waitings.empty?
+      while !@waitings.empty? || @blocking_cnt > 0 || !@input_waitings.empty? || !@output_waitings.empty?
         while !@waitings.empty?
           first_fiber, first_timeout = @waitings.min_by{|fiber, timeout| timeout}
           break if Time.now < first_timeout
@@ -77,14 +77,14 @@ module AsyncScheduler
         # TODO: This is not necessarily an efficient way.
         # When timeout of a blocker in @waitings has come,
         # the scheduler should stop `select` system call, and execute the fiber which is not blocked any more.
-        while !@output_waitings.empty?# || !@input_waitings.empty?
+        while !@output_waitings.empty? || !@input_waitings.empty?
           # TODO: using select syscall is not efficient. Use epoll/kqueue here.
           inputs_ready, outputs_ready = IO.select(@input_waitings.keys, @output_waitings.keys)
 
-          # inputs_ready.each do |input|
-          #   fiber_non_blocking = @input_waitings.delete(input)
-          #   fiber_non_blocking.resume
-          # end
+          inputs_ready.each do |input|
+            fiber_non_blocking = @input_waitings.delete(input)
+            fiber_non_blocking.resume
+          end
 
           outputs_ready.each do |output|
             fiber_non_blocking = @output_waitings.delete(output)
@@ -105,10 +105,9 @@ module AsyncScheduler
       # TODO: use timeout parameter
       # TODO?: Expected to return the subset of events that are ready immediately.
 
-      # TODO: uncomment this lines in an appropriate PR.
-      # if events & IO::READABLE == IO::READABLE
-      #   @input_waitings[io] = Fiber.current
-      # end
+      if events & IO::READABLE == IO::READABLE
+        @input_waitings[io] = Fiber.current
+      end
 
       if events & IO::WRITABLE == IO::WRITABLE
         @output_waitings[io] = Fiber.current
@@ -117,7 +116,44 @@ module AsyncScheduler
       Fiber.yield
     end
 
-    def io_read(io, buffer, length) # read length or -errno
+    # Invoked by IO#read to read length bytes from io into a specified buffer (see IO::Buffer).
+    # The length argument is the “minimum length to be read”. If the IO buffer size is 8KiB, but the length is 1024 (1KiB), up to 8KiB might be read, but at least 1KiB will be.
+    # Generally, the only case where less data than length will be read is if there is an error reading the data.
+    # Specifying a length of 0 is valid and means try reading at least once and return any available data.
+
+    # Suggested implementation should try to read from io in a non-blocking manner and call io_wait if the io is not ready (which will yield control to other fibers).
+    # See IO::Buffer for an interface available to return data.
+    # Expected to return number of bytes read, or, in case of an error, -errno (negated number corresponding to system's error code).
+    def io_read(io, buffer, length) # return length or -errno
+      read_string = ""
+      offset = 0
+      while offset < length || length == 0
+        read_nonblock = Fiber.new(blocking: true) do
+          # AsyncScheduler::Scheduler#io_read is hooked to IO#read_nonblock.
+          # To avoid an infinite call loop, IO#read_nonblock is called inside a Fiber whose blocking=true.
+          # ref. https://docs.ruby-lang.org/ja/latest/method/IO/i/read_nonblock.html
+          io.read_nonblock(buffer.size-offset, read_string, exception: false)
+        end
+
+        begin
+          # This fiber is resumed only here.
+          result = read_nonblock.resume
+        rescue SystemCallError => e
+          return -e.errno
+        end
+
+        case result
+        when :wait_readable
+          io_wait(io, IO::READABLE, nil)
+        when nil # when reaching EOF
+          # TODO: Investigate if it is expected to break here.
+          break
+        else
+          offset += buffer.set_string(read_string, offset) # this does not work with `#set_string(result)`
+          break if length == 0
+        end
+      end
+      return offset
     end
 
     # Invoked by IO#write to write length bytes to io from from a specified buffer (see IO::Buffer).
