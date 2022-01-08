@@ -25,7 +25,6 @@ RSpec.describe AsyncScheduler do
         File.open("./log3.txt", "w"){|f| f.write("ccc") }
         puts '## finished writing in the third fiber'
       end
-
     end
     thread.join
     puts "It took #{Time.now - t} seconds to run three fibers concurrently."

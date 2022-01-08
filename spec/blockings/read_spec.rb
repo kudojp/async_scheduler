@@ -28,7 +28,6 @@ RSpec.describe AsyncScheduler do
         puts '## finished reading in the third fiber'
         puts f3
       end
-
     end
     thread.join
     puts "It took #{Time.now - t} seconds to run three fibers concurrently."
