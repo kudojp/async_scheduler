@@ -3,7 +3,7 @@ module AsyncScheduler
   # See https://ruby-doc.org/core-3.1.0/Fiber/SchedulerInterface.html for details.
   class Scheduler
     def initialize
-      # (key, value) = (Fiber object, timeout)
+      # (key, value) = (Fiber object, timeout[not nil])
       @waitings = {}
       # (key, value) = (blocking io, Fiber object)
       @input_waitings = {}
@@ -67,29 +67,30 @@ module AsyncScheduler
     # The suggested pattern is to implement the main event loop in the close method.
     def close
       while !@waitings.empty? || @blocking_cnt > 0 || !@input_waitings.empty? || !@output_waitings.empty?
+        _, earliest_timeout = @waitings.min_by{|fiber, timeout| timeout}
+
+        inputs_ready, outputs_ready = IO.select(@input_waitings.keys, @output_waitings.keys, [], earliest_timeout - Time.now)
+
+        if !inputs_ready.nil? # when not timeout
+          inputs_ready.each do |input|
+            fiber_non_blocking = @input_waitings.delete(input)
+            fiber_non_blocking.resume
+          end
+        end
+
+        if !outputs_ready.nil? # when not timeout
+          outputs_ready.each do |output|
+            fiber_non_blocking = @output_waitings.delete(output)
+            fiber_non_blocking.resume
+          end
+        end
+
+        # TODO: Use a min heap for @waitings
         while !@waitings.empty?
           first_fiber, first_timeout = @waitings.min_by{|fiber, timeout| timeout}
           break if Time.now < first_timeout
           unblock(:_closed_fiber, first_fiber) # TODO: pass a good named identifier of the fiber
           @waitings.delete(first_fiber)
-        end
-
-        # TODO: This is not necessarily an efficient way.
-        # When timeout of a blocker in @waitings has come,
-        # the scheduler should stop `select` system call, and execute the fiber which is not blocked any more.
-        while !@output_waitings.empty? || !@input_waitings.empty?
-          # TODO: using select syscall is not efficient. Use epoll/kqueue here.
-          inputs_ready, outputs_ready = IO.select(@input_waitings.keys, @output_waitings.keys)
-
-          inputs_ready.each do |input|
-            fiber_non_blocking = @input_waitings.delete(input)
-            fiber_non_blocking.resume
-          end
-
-          outputs_ready.each do |output|
-            fiber_non_blocking = @output_waitings.delete(output)
-            fiber_non_blocking.resume
-          end
         end
       end
     end
