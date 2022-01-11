@@ -71,14 +71,14 @@ module AsyncScheduler
 
         inputs_ready, outputs_ready = IO.select(@input_waitings.keys, @output_waitings.keys, [], earliest_timeout - Time.now)
 
-        if !inputs_ready.nil?
+        if !inputs_ready.nil? # when not timeout
           inputs_ready.each do |input|
             fiber_non_blocking = @input_waitings.delete(input)
             fiber_non_blocking.resume
           end
         end
 
-        if !outputs_ready.nil?
+        if !outputs_ready.nil? # when not timeout
           outputs_ready.each do |output|
             fiber_non_blocking = @output_waitings.delete(output)
             fiber_non_blocking.resume
