@@ -3,7 +3,7 @@ module AsyncScheduler
   # See https://ruby-doc.org/core-3.1.0/Fiber/SchedulerInterface.html for details.
   class Scheduler
     def initialize
-      # (key, value) = (Fiber object, timeout)
+      # (key, value) = (Fiber object, timeout[not nil])
       @waitings = {}
       # (key, value) = (blocking io, Fiber object)
       @input_waitings = {}
