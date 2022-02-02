@@ -67,14 +67,6 @@ module AsyncScheduler
     # The suggested pattern is to implement the main event loop in the close method.
     def close
       while !@waitings.empty? || @blocking_cnt > 0 || !@input_waitings.empty? || !@output_waitings.empty?
-        # TODO: Use a min heap for @waitings
-        while !@waitings.empty?
-          first_fiber, first_timeout = @waitings.min_by{|fiber, timeout| timeout}
-          break if Time.now < first_timeout
-          unblock(:_closed_fiber, first_fiber) # TODO: pass a good named identifier of the fiber
-          @waitings.delete(first_fiber)
-        end
-
         while !@input_waitings.empty? || !@output_waitings.empty?
           _, earliest_timeout = @waitings.min_by{|fiber, timeout| timeout}
           timeout =
@@ -102,6 +94,14 @@ module AsyncScheduler
               fiber_non_blocking.resume
             end
           end
+        end
+
+        # TODO: Use a min heap for @waitings
+        while !@waitings.empty?
+          first_fiber, first_timeout = @waitings.min_by{|fiber, timeout| timeout}
+          break if Time.now < first_timeout
+          unblock(:_closed_fiber, first_fiber) # TODO: pass a good named identifier of the fiber
+          @waitings.delete(first_fiber)
         end
       end
     end
