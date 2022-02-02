@@ -81,18 +81,14 @@ module AsyncScheduler
           # NOTE: IO.select will keep blocking until timeout even if any new event is added to @waitings.
           inputs_ready, outputs_ready = IO.select(@input_waitings.keys, @output_waitings.keys, [], timeout)
 
-          if !inputs_ready.nil? # when not timeout
-            inputs_ready.each do |input|
-              fiber_non_blocking = @input_waitings.delete(input)
-              fiber_non_blocking.resume
-            end
+          inputs_ready&.each do |input|
+            fiber_non_blocking = @input_waitings.delete(input)
+            fiber_non_blocking.resume
           end
 
-          if !outputs_ready.nil? # when not timeout
-            outputs_ready.each do |output|
-              fiber_non_blocking = @output_waitings.delete(output)
-              fiber_non_blocking.resume
-            end
+          outputs_ready&.each do |output|
+            fiber_non_blocking = @output_waitings.delete(output)
+            fiber_non_blocking.resume
           end
         end
 
