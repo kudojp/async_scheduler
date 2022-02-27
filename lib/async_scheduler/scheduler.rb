@@ -9,7 +9,7 @@ module AsyncScheduler
       @input_waitings = {}
       @output_waitings = {}
       # Fibers which are blocking and whose timeouts are not determined.
-      # e.g. Fiber which wraps sleep()
+      # e.g. Fiber which includes sleep()
       @blockings = Set.new()
     end
 
