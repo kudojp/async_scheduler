@@ -5,6 +5,10 @@ See: https://github.com/kudojp/async_scheduler/blob/main/lib/async_scheduler/sch
 
 # AsyncScheduler
 
+[![CI](https://github.com/kudojp/async_scheduler/actions/workflows/ci.yaml/badge.svg)](https://github.com/kudojp/async_scheduler/actions/workflows/ci.yaml)
+[![codecov](https://codecov.io/gh/kudojp/async_scheduler/branch/main/graph/badge.svg?token=1JZU04RYFD)](https://codecov.io/gh/kudojp/async_scheduler)
+[![License](https://img.shields.io/github/license/kudojp/async_scheduler)](./LICENSE)
+
 Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/async_scheduler`. To experiment with that code, run `bin/console` for an interactive prompt.
 
 TODO: Delete this and the text above, and describe your gem
