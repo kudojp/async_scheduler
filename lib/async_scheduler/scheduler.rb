@@ -65,6 +65,18 @@ module AsyncScheduler
     # This implementation will only interrupt non-blocking operations.
     # If the block is executed successfully, its result will be returned.
     def timeout_after(duration, exception_class, *exception_arguments, &block) # → result of block
+      fiber = Fiber.current
+
+      if duration
+        fiber() do
+          sleep(duration)
+          if fiber.alive?
+            fiber.raise(exception_class, *exception_arguments)
+          end
+        end
+      end
+
+      yield duration
     end
 
     # Called when the current thread exits. The scheduler is expected to implement this method in order to allow all waiting fibers to finalize their execution.
