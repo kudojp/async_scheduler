@@ -88,16 +88,18 @@ module AsyncScheduler
             end
 
           # NOTE: IO.select will keep blocking until timeout even if any new event is added to @waitings.
+          # TODO: Don't wait for the input  ready when the corresponding fiber gets terminated, and when it is the only one in @input_waitings.
+          # TODO: Don't wait for the output ready when the corresponding fiber gets terminated, and when it is the only one in @output_waitings.
           inputs_ready, outputs_ready = IO.select(@input_waitings.keys, @output_waitings.keys, [], timeout)
 
           inputs_ready&.each do |input|
             fiber_non_blocking = @input_waitings.delete(input)
-            fiber_non_blocking.resume
+            fiber_non_blocking.resume if fiber_non_blocking.alive?
           end
 
           outputs_ready&.each do |output|
             fiber_non_blocking = @output_waitings.delete(output)
-            fiber_non_blocking.resume
+            fiber_non_blocking.resume if fiber_non_blocking.alive?
           end
         end
 
@@ -106,7 +108,10 @@ module AsyncScheduler
           first_fiber, first_timeout = @waitings.min_by{|fiber, timeout| timeout}
           break if Time.now < first_timeout
           @waitings.delete(first_fiber)
+          first_fiber.resume if first_fiber.alive?
         end
+
+        @blockings.select!{|fiber| fiber.alive?}
       end
     end
 
