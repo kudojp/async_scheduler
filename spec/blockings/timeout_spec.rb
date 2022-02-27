@@ -35,7 +35,7 @@ RSpec.describe AsyncScheduler do
       #         t = Time.now
       #         timeout_error_message = "timeout!"
       #         expect{
-      #           Timeout.timeout(0.5, TimeoutError, timeout_error_message) do
+      #           Timeout.timeout(nil, TimeoutError, timeout_error_message) do
       #             sleep()
       #           end
       #         }.to raise_error(TimeoutError, timeout_error_message)
