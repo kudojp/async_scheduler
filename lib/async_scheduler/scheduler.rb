@@ -51,11 +51,11 @@ module AsyncScheduler
     # Implementation might register the current fiber in some list of “which fiber wait until what moment”,
     # call Fiber.yield to pass control, and then in close resume the fibers whose wait period has elapsed.
     def kernel_sleep(duration = nil)
-      if duration
-        block(:kernel_sleep, Time.now + duration)
+      timeout = duration ? Time.now + duration : nil
+      if block(:kernel_sleep, timeout)
         Fiber.yield
       else
-        @blocking_cnt += 1
+        raise RuntimeError.new("Failed to sleep")
       end
     end
 
