@@ -27,8 +27,14 @@ module AsyncScheduler
     # blocker is what we are waiting on, informational only (for debugging and logging). There are no guarantee about its value.
     # Expected to return boolean, specifying whether the blocking operation was successful or not.
     def block(blocker, timeout = nil)
-      @waitings[Fiber.current] = timeout
-      return true
+      # TODO: Make use of blocker.
+      if timeout
+        @waitings[Fiber.current] = timeout
+      else
+        @blockings << Fiber.current
+      end
+
+      true
     end
 
     # Invoked to wake up Fiber previously blocked with block (for example, Mutex#lock calls block and Mutex#unlock calls unblock).
@@ -36,6 +42,8 @@ module AsyncScheduler
     # blocker is what was awaited for, but it is informational only (for debugging and logging),
     # and it is not guaranteed to be the same value as the blocker for block.
     def unblock(blocker, fiber)
+      # TODO: Make use of blocker.
+      @blockings.delete fiber
       fiber.resume
     end
 
