@@ -1,5 +1,15 @@
 # frozen_string_literal: true
 
+if ENV['CI']
+  require "simplecov"
+  SimpleCov.start do
+    add_filter '/spec/'
+  end
+
+  require "simplecov-cobertura"
+  SimpleCov.formatter = SimpleCov::Formatter::CoberturaFormatter
+end
+
 require "async_scheduler"
 
 RSpec.configure do |config|
