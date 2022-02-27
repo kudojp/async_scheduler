@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 require 'timeout'
-class TimeoutError < StandardError; end
 
 RSpec.describe AsyncScheduler do
+  class CustomTimeoutError < StandardError; end
   describe "Timeout.timeout() called asynchronously" do
     context "when Timeout.timeout is called with duration which is longer than the block execution time" do
       it "returns the return value of the block" do
@@ -12,7 +12,7 @@ RSpec.describe AsyncScheduler do
             t = Time.now
             timeout_error_message = "timeout!"
             expect(
-              Timeout.timeout(1, TimeoutError, timeout_error_message) do
+              Timeout.timeout(1, CustomTimeoutError, timeout_error_message) do
                 sleep(0.5)
                 break 12
               end
@@ -35,10 +35,10 @@ RSpec.describe AsyncScheduler do
       #         t = Time.now
       #         timeout_error_message = "timeout!"
       #         expect{
-      #           Timeout.timeout(nil, TimeoutError, timeout_error_message) do
+      #           Timeout.timeout(nil, CustomTimeoutError, timeout_error_message) do
       #             sleep()
       #           end
-      #         }.to raise_error(TimeoutError, timeout_error_message)
+      #         }.to raise_error(CustomTimeoutError, timeout_error_message)
       #       end
       #     end
       #     thread.join
@@ -53,10 +53,10 @@ RSpec.describe AsyncScheduler do
               t = Time.now
               timeout_error_message = "timeout!"
               expect{
-                Timeout.timeout(0.5, TimeoutError, timeout_error_message) do
+                Timeout.timeout(0.5, CustomTimeoutError, timeout_error_message) do
                   sleep(1)
                 end
-              }.to raise_error(TimeoutError, timeout_error_message)
+              }.to raise_error(CustomTimeoutError, timeout_error_message)
             end
           end
           thread.join
@@ -72,7 +72,7 @@ RSpec.describe AsyncScheduler do
             t = Time.now
             timeout_error_message = "timeout!"
             expect(
-              Timeout.timeout(nil, TimeoutError, timeout_error_message) do
+              Timeout.timeout(nil, CustomTimeoutError, timeout_error_message) do
                 sleep(0.5)
                 break 12
               end
