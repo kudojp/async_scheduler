@@ -106,7 +106,6 @@ module AsyncScheduler
           first_fiber, first_timeout = @waitings.min_by{|fiber, timeout| timeout}
           break if Time.now < first_timeout
           @waitings.delete(first_fiber)
-          unblock(:_closed_fiber, first_fiber) # TODO: pass a good named identifier of the fiber
         end
       end
     end
