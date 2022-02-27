@@ -8,8 +8,9 @@ module AsyncScheduler
       # (key, value) = (blocking io, Fiber object)
       @input_waitings = {}
       @output_waitings = {}
-      # number of blockers which blocks for good. e.g. sleeping without the timeout.
-      @blocking_cnt = 0
+      # Fibers which are blocking and whose timeouts are not determined.
+      # e.g. Fiber which wraps sleep()
+      @blockings = Set.new()
     end
 
 
