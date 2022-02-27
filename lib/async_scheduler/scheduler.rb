@@ -8,8 +8,9 @@ module AsyncScheduler
       # (key, value) = (blocking io, Fiber object)
       @input_waitings = {}
       @output_waitings = {}
-      # number of blockers which blocks for good. e.g. sleeping without the timeout.
-      @blocking_cnt = 0
+      # Fibers which are blocking and whose timeouts are not determined.
+      # e.g. Fiber which includes sleep()
+      @blockings = Set.new()
     end
 
 
@@ -26,8 +27,14 @@ module AsyncScheduler
     # blocker is what we are waiting on, informational only (for debugging and logging). There are no guarantee about its value.
     # Expected to return boolean, specifying whether the blocking operation was successful or not.
     def block(blocker, timeout = nil)
-      @waitings[Fiber.current] = timeout
-      return true
+      # TODO: Make use of blocker.
+      if timeout
+        @waitings[Fiber.current] = timeout
+      else
+        @blockings << Fiber.current
+      end
+
+      true
     end
 
     # Invoked to wake up Fiber previously blocked with block (for example, Mutex#lock calls block and Mutex#unlock calls unblock).
@@ -35,6 +42,8 @@ module AsyncScheduler
     # blocker is what was awaited for, but it is informational only (for debugging and logging),
     # and it is not guaranteed to be the same value as the blocker for block.
     def unblock(blocker, fiber)
+      # TODO: Make use of blocker.
+      @blockings.delete fiber
       fiber.resume
     end
 
@@ -42,11 +51,11 @@ module AsyncScheduler
     # Implementation might register the current fiber in some list of “which fiber wait until what moment”,
     # call Fiber.yield to pass control, and then in close resume the fibers whose wait period has elapsed.
     def kernel_sleep(duration = nil)
-      if duration
-        block(:kernel_sleep, Time.now + duration)
+      timeout = duration ? Time.now + duration : nil
+      if block(:kernel_sleep, timeout)
         Fiber.yield
       else
-        @blocking_cnt += 1
+        raise RuntimeError.new("Failed to sleep")
       end
     end
 
@@ -66,7 +75,7 @@ module AsyncScheduler
     # Called when the current thread exits. The scheduler is expected to implement this method in order to allow all waiting fibers to finalize their execution.
     # The suggested pattern is to implement the main event loop in the close method.
     def close
-      while !@waitings.empty? || @blocking_cnt > 0 || !@input_waitings.empty? || !@output_waitings.empty?
+      while !@waitings.empty? || !@blockings.empty? || !@input_waitings.empty? || !@output_waitings.empty?
         while !@input_waitings.empty? || !@output_waitings.empty?
           _, earliest_timeout = @waitings.min_by{|fiber, timeout| timeout}
           timeout =
