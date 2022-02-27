@@ -1,3 +1,5 @@
+require 'set'
+
 module AsyncScheduler
   # This class implements Fiber::SchedulerInterface.
   # See https://ruby-doc.org/core-3.1.0/Fiber/SchedulerInterface.html for details.
@@ -61,15 +63,22 @@ module AsyncScheduler
 
     # Invoked by Timeout.timeout to execute the given block within the given duration.
     # It can also be invoked directly by the scheduler or user code.
-    # Attempt to limit the execution time of a given block to the given duration if possible.
-    # When a non-blocking operation causes the block's execution time to exceed the specified duration, that non-blocking operation should be interrupted by raising the specified exception_class constructed with the given exception_arguments.
-    # General execution timeouts are often considered risky.
+    #
     # This implementation will only interrupt non-blocking operations.
-    # This is by design because it's expected that non-blocking operations can fail for a variety of unpredictable reasons, so applications should already be robust in handling these conditions and by implication timeouts.
-    # However, as a result of this design, if the block does not invoke any non-blocking operations, it will be impossible to interrupt it. If you desire to provide predictable points for timeouts, consider adding +sleep(0)+.
     # If the block is executed successfully, its result will be returned.
-    # The exception will typically be raised using Fiber#raise.
     def timeout_after(duration, exception_class, *exception_arguments, &block) # → result of block
+      fiber = Fiber.current
+
+      if duration
+        fiber() do
+          sleep(duration)
+          if fiber.alive?
+            fiber.raise(exception_class, *exception_arguments)
+          end
+        end
+      end
+
+      yield duration
     end
 
     # Called when the current thread exits. The scheduler is expected to implement this method in order to allow all waiting fibers to finalize their execution.
