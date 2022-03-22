@@ -246,5 +246,10 @@ module AsyncScheduler
       end
       return offset
     end
+
+    def address_resolve(hostname)
+      # TODO
+      return ["1.2.3.4", "5.6.7.8"]
+    end
   end
 end
