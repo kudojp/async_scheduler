@@ -53,7 +53,7 @@ module AsyncScheduler
     # Implementation might register the current fiber in some list of “which fiber wait until what moment”,
     # call Fiber.yield to pass control, and then in close resume the fibers whose wait period has elapsed.
     def kernel_sleep(duration = nil)
-      timeout = duration ? Time.now + duration : nil
+      timeout = duration ? Process.clock_gettime(Process::CLOCK_MONOTONIC) + duration : nil
       if block(:kernel_sleep, timeout)
         Fiber.yield
       else
@@ -90,10 +90,10 @@ module AsyncScheduler
           timeout =
             if earliest_timeout.nil?
               nil    # no element in @waitings, thus do IO.select forever.
-            elsif earliest_timeout < Time.now
+            elsif earliest_timeout < Process.clock_gettime(Process::CLOCK_MONOTONIC)
               break  # handle an event in @waitings first.
             else
-              earliest_timeout - Time.now # See the note below.
+              earliest_timeout - Process.clock_gettime(Process::CLOCK_MONOTONIC) # See the note below.
             end
 
           # NOTE: IO.select will keep blocking until timeout even if any new event is added to @waitings.
@@ -115,7 +115,7 @@ module AsyncScheduler
         # TODO: Use a min heap for @waitings
         while !@waitings.empty?
           first_fiber, first_timeout = @waitings.min_by{|fiber, timeout| timeout}
-          break if Time.now < first_timeout
+          break if Process.clock_gettime(Process::CLOCK_MONOTONIC) < first_timeout
           @waitings.delete(first_fiber)
           first_fiber.resume if first_fiber.alive?
         end
