@@ -86,7 +86,6 @@ module AsyncScheduler
     def close
       while !@waitings.empty? || !@blockings.empty? || !@input_waitings.empty? || !@output_waitings.empty?
         while !@input_waitings.empty? || !@output_waitings.empty?
-          # TODO: Use a min heap for @waitings
           _, earliest_timeout = @waitings.min_by{|fiber, timeout| timeout}
           timeout =
             if earliest_timeout.nil?
@@ -113,14 +112,12 @@ module AsyncScheduler
           end
         end
 
+        # TODO: Use a min heap for @waitings
         while !@waitings.empty?
-          # TODO: Use a min heap for @waitings
-          @waitings
-            .select{|fiber, timeout| timeout <= Process.clock_gettime(Process::CLOCK_MONOTONIC)}
-            .each{|fiber, _|
-              @waitings.delete(fiber)
-              fiber.resume if fiber.alive?
-            }
+          first_fiber, first_timeout = @waitings.min_by{|fiber, timeout| timeout}
+          break if Process.clock_gettime(Process::CLOCK_MONOTONIC) < first_timeout
+          @waitings.delete(first_fiber)
+          first_fiber.resume if first_fiber.alive?
         end
 
         @blockings.select!{|fiber| fiber.alive?}
