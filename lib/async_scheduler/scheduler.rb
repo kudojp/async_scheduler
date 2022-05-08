@@ -115,12 +115,11 @@ module AsyncScheduler
 
         unless @waitings.empty?
           # TODO: Use a min heap for @waitings
-          @waitings
-            .select{|fiber, timeout| timeout <= Process.clock_gettime(Process::CLOCK_MONOTONIC)}
-            .each{|fiber, _|
-              @waitings.delete(fiber)
-              fiber.resume if fiber.alive?
-            }
+          resumable_fibers = @waitings.select{|_fiber, timeout| timeout <= Process.clock_gettime(Process::CLOCK_MONOTONIC)}
+                                      .map{|fiber, _timeout| fiber}
+                                      .to_set
+          resumable_fibers.each{|fiber| fiber.resume if fiber.alive?}
+          @waitings.reject!{|fiber, _timeout| resumable_fibers.include? fiber}
         end
 
         @blockings.select!{|fiber| fiber.alive?}
