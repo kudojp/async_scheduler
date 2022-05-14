@@ -3,6 +3,8 @@ require 'socket'
 
 RSpec.describe AsyncScheduler do
   it "resolves addresses in a Fiber.schedule block" do
+    puts "###### TODO! Confirm that times below does not improve in a liner manner."
+
     t = Time.now
     params = [1, 10, 100]
 
