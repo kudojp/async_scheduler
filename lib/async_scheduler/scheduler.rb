@@ -247,6 +247,8 @@ module AsyncScheduler
       return offset
     end
 
+    # Invoked by any method that performs a non-reverse DNS lookup. (e.g. Addrinfo.getaddrinfo)
+    # The method is expected to return an array of strings corresponding to ip addresses the hostname is resolved to, or nil if it can not be resolved.
     def address_resolve(hostname)
       # TODO
       return ["1.2.3.4", "5.6.7.8"]
