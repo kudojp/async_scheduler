@@ -4,6 +4,11 @@ module AsyncScheduler
   # This class implements Fiber::SchedulerInterface.
   # See https://ruby-doc.org/core-3.1.0/Fiber/SchedulerInterface.html for details.
   class Scheduler
+    attr_reader :resumers
+    class << self
+      attr_accessor :scheduler_ids
+    end
+
     def initialize
       # (key, value) = (Fiber object, timeout[not nil])
       @waitings = {}
@@ -13,6 +18,9 @@ module AsyncScheduler
       # Fibers which are blocking and whose timeouts are not determined.
       # e.g. Fiber which includes sleep()
       @blockings = Set.new()
+      @resumers = []
+
+      self.class.scheduler_ids = []
     end
 
 
@@ -21,6 +29,7 @@ module AsyncScheduler
     # and to return that Fiber.
     def fiber(&block)
       fiber = Fiber.new(blocking: false, &block)
+      @resumers << "From now, resume a fiber (id=#{fiber.object_id}) at #{__FILE__}##{__LINE__} inside of Scheduler (id=#{self.object_id}) in Thread (id=#{Thread.current.object_id}). Currently in the fiber (id=#{Fiber.current.object_id}). Callers are: #{caller}"
       fiber.resume
       fiber
     end
@@ -46,6 +55,7 @@ module AsyncScheduler
     def unblock(blocker, fiber)
       # TODO: Make use of blocker.
       @blockings.delete fiber
+      @resumers << "From now, resume a fiber (id=#{fiber.object_id}) at #{__FILE__}##{__LINE__} inside of Scheduler (id=#{self.object_id}) in Thread (id=#{Thread.current.object_id}). Currently in the fiber (id=#{Fiber.current.object_id}). Callers are: #{caller}"
       fiber.resume
     end
 
@@ -104,11 +114,13 @@ module AsyncScheduler
 
           inputs_ready&.each do |input|
             fiber_non_blocking = @input_waitings.delete(input)
+            @resumers << "From now, resume a fiber (id=#{fiber_non_blocking.object_id}) at #{__FILE__}##{__LINE__} inside of Scheduler (id=#{self.object_id}) in Thread (id=#{Thread.current.object_id})"
             fiber_non_blocking.resume if fiber_non_blocking.alive?
           end
 
           outputs_ready&.each do |output|
             fiber_non_blocking = @output_waitings.delete(output)
+            @resumers << "From now, resume a fiber (id=#{fiber_non_blocking.object_id}) at #{__FILE__}##{__LINE__} inside of Scheduler (id=#{self.object_id}) in Thread (id=#{Thread.current.object_id})"
             fiber_non_blocking.resume if fiber_non_blocking.alive?
           end
         end
@@ -118,7 +130,12 @@ module AsyncScheduler
           resumable_fibers = @waitings.select{|_fiber, timeout| timeout <= Process.clock_gettime(Process::CLOCK_MONOTONIC)}
                                       .map{|fiber, _timeout| fiber}
                                       .to_set
-          resumable_fibers.each{|fiber| fiber.resume if fiber.alive?}
+          resumable_fibers.each{|fiber|
+            if fiber.alive?
+              @resumers << "From now, resume a fiber (id=#{fiber.object_id}) at #{__FILE__}##{__LINE__} inside of Scheduler (id=#{self.object_id}) in Thread (id=#{Thread.current.object_id}). Currently in the fiber (id=#{Fiber.current.object_id}). Callers are: #{caller}"
+              fiber.resume
+            end
+          }
           @waitings.reject!{|fiber, _timeout| resumable_fibers.include? fiber}
         end
 
@@ -168,6 +185,7 @@ module AsyncScheduler
 
         begin
           # This fiber is resumed only here.
+          @resumers << "From now, resume a fiber (id=#{read_nonblock.object_id}) at #{__FILE__}##{__LINE__} inside of Scheduler (id=#{self.object_id}) in Thread (id=#{Thread.current.object_id})"
           result = read_nonblock.resume
         rescue SystemCallError => e
           return -e.errno
@@ -209,6 +227,7 @@ module AsyncScheduler
         end
 
         begin
+          @resumers << "From now, resume a fiber (id=#{write_nonblock.object_id}) at #{__FILE__}##{__LINE__} inside of Scheduler (id=#{self.object_id}) in Thread (id=#{Thread.current.object_id})"
           result = write_nonblock.resume
         rescue SystemCallError => e
           return -e.errno
