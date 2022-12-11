@@ -1,10 +1,15 @@
 require 'set'
+require_relative './cross_thread_usage_detector'
 
 module AsyncScheduler
   # This class implements Fiber::SchedulerInterface.
   # See https://ruby-doc.org/core-3.1.0/Fiber/SchedulerInterface.html for details.
   class Scheduler
+    include CrossThreadUsageDetector
+
     def initialize
+      set_belonging_thread(Thread.current.object_id)
+
       # (key, value) = (Fiber object, timeout[not nil])
       @waitings = {}
       # (key, value) = (blocking io, Fiber object)
@@ -15,11 +20,12 @@ module AsyncScheduler
       @blockings = Set.new()
     end
 
-
     # Implementation of the Fiber.schedule.
     # The method is expected to immediately run the given block of code in a separate non-blocking fiber,
     # and to return that Fiber.
     def fiber(&block)
+      validate_used_in_original_thread!(Thread.current.object_id)
+
       fiber = Fiber.new(blocking: false, &block)
       fiber.resume
       fiber
@@ -29,6 +35,8 @@ module AsyncScheduler
     # blocker is what we are waiting on, informational only (for debugging and logging). There are no guarantee about its value.
     # Expected to return boolean, specifying whether the blocking operation was successful or not.
     def block(blocker, timeout = nil)
+      validate_used_in_original_thread!(Thread.current.object_id)
+
       # TODO: Make use of blocker.
       if timeout
         @waitings[Fiber.current] = timeout
@@ -44,6 +52,8 @@ module AsyncScheduler
     # blocker is what was awaited for, but it is informational only (for debugging and logging),
     # and it is not guaranteed to be the same value as the blocker for block.
     def unblock(blocker, fiber)
+      validate_used_in_original_thread!(Thread.current.object_id)
+
       # TODO: Make use of blocker.
       @blockings.delete fiber
       fiber.resume
@@ -53,6 +63,8 @@ module AsyncScheduler
     # Implementation might register the current fiber in some list of “which fiber wait until what moment”,
     # call Fiber.yield to pass control, and then in close resume the fibers whose wait period has elapsed.
     def kernel_sleep(duration = nil)
+      validate_used_in_original_thread!(Thread.current.object_id)
+
       timeout = duration ? Process.clock_gettime(Process::CLOCK_MONOTONIC) + duration : nil
       if block(:kernel_sleep, timeout)
         Fiber.yield
@@ -67,6 +79,8 @@ module AsyncScheduler
     # This implementation will only interrupt non-blocking operations.
     # If the block is executed successfully, its result will be returned.
     def timeout_after(duration, exception_class, *exception_arguments, &block) # → result of block
+      validate_used_in_original_thread!(Thread.current.object_id)
+
       current_fiber = Fiber.current
 
       if duration
@@ -84,6 +98,8 @@ module AsyncScheduler
     # Called when the current thread exits. The scheduler is expected to implement this method in order to allow all waiting fibers to finalize their execution.
     # The suggested pattern is to implement the main event loop in the close method.
     def close
+      validate_used_in_original_thread!(Thread.current.object_id)
+
       while !@waitings.empty? || !@blockings.empty? || !@input_waitings.empty? || !@output_waitings.empty?
         while !@input_waitings.empty? || !@output_waitings.empty?
           # TODO: Use a min heap for @waitings
@@ -133,6 +149,8 @@ module AsyncScheduler
     # Then, in the close method, the scheduler might dispatch all the I/O resources to fibers waiting for it.
     # Expected to return the subset of events that are ready immediately.
     def io_wait(io, events, _timeout)
+      validate_used_in_original_thread!(Thread.current.object_id)
+
       # TODO: use timeout parameter
       # TODO?: Expected to return the subset of events that are ready immediately.
 
@@ -156,6 +174,8 @@ module AsyncScheduler
     # See IO::Buffer for an interface available to return data.
     # Expected to return number of bytes read, or, in case of an error, -errno (negated number corresponding to system's error code).
     def io_read(io, buffer, length) # return length or -errno
+      validate_used_in_original_thread!(Thread.current.object_id)
+
       read_string = ""
       offset = 0
       while offset < length || length == 0
@@ -197,6 +217,8 @@ module AsyncScheduler
     # See IO::Buffer for an interface available to get data from buffer efficiently.
     # Expected to return number of bytes written, or, in case of an error, -errno (negated number corresponding to system's error code).
     def io_write(io, buffer, length) # returns: written length or -errnoclick to toggle source
+      validate_used_in_original_thread!(Thread.current.object_id)
+
       offset = 0
 
       while offset < length || length == 0
