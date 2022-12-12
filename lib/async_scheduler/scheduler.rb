@@ -8,7 +8,7 @@ module AsyncScheduler
     include CrossThreadUsageDetector
 
     def initialize
-      set_belonging_thread
+      set_belonging_thread!
 
       # (key, value) = (Fiber object, timeout[not nil])
       @waitings = {}
