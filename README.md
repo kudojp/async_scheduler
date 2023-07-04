@@ -33,7 +33,7 @@ $ gem install async_scheduler
 ## Usage
 
 Set this scheduler in the current thread.
-Then, surround the blocking oerations in `Fiber.schedule` block so  that they are executed concurrently.
+Then, surround each of blocking oerations in `Fiber.schedule` block so  that they are executed concurrently.
 
 ```rb
 Fiber.set_schduler AsyncScheduler::Scheduler.new
