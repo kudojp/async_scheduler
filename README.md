@@ -6,7 +6,7 @@
 [![codecov](https://codecov.io/gh/kudojp/async_scheduler/branch/main/graph/badge.svg?token=1JZU04RYFD)](https://codecov.io/gh/kudojp/async_scheduler)
 [![License](https://img.shields.io/github/license/kudojp/async_scheduler)](./LICENSE)
 
-This is a Fiber Schduler, which is a missing piece to do concurrent programming in Ruby language.
+This is a Fiber Schduler, which is a missing piece to do concurrent programming in Ruby language.  
 If you are not familiar with the concept of Fiber Schduler, please refer to my presentation: [Ruby の FiberScheduler を布教したい](https://speakerdeck.com/kudojp/ruby-false-fiberscheduler-wobu-jiao-sitai). (Sorry in Japanese.)
 
 
