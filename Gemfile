@@ -4,6 +4,10 @@ source "https://rubygems.org"
 
 # Specify your gem's dependencies in async_scheduler.gemspec
 gemspec
+# TODO: move this to gemspec file.
+# Also, remove `require: "nonblocking/resolv"`. I don't know how to clean this up now.
+# gem "nonblocking-resolv", :github => 'kudojp/nonblocking-resolv'
+gem "nonblocking-resolv", path: "../nonblocking-resolv"
 
 gem "rake", "~> 13.0"
 

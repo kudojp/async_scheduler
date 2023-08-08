@@ -1,5 +1,6 @@
 require 'set'
 require_relative './cross_thread_usage_detector'
+require 'nonblocking/resolv'
 
 module AsyncScheduler
   # This class implements Fiber::SchedulerInterface.
@@ -10,11 +11,13 @@ module AsyncScheduler
     def initialize
       set_belonging_thread!
 
-      # (key, value) = (Fiber object, timeout[not nil])
+      # (key, value) = (Fiber object, timeout<not nil>)
       @waitings = {}
       # (key, value) = (blocking io, Fiber object)
       @input_waitings = {}
       @output_waitings = {}
+      # (key, value) = (blocking io, [Fiber object, timeout<not nil>])
+      @input_waitings_with_timeout = {}
       # Fibers which are blocking and whose timeouts are not determined.
       # e.g. Fiber which includes sleep()
       @blockings = Set.new()
@@ -100,28 +103,42 @@ module AsyncScheduler
     def close
       validate_used_in_original_thread!
 
-      while !@waitings.empty? || !@blockings.empty? || !@input_waitings.empty? || !@output_waitings.empty?
-        while !@input_waitings.empty? || !@output_waitings.empty?
-          # TODO: Use a min heap for @waitings
-          _, earliest_timeout = @waitings.min_by{|fiber, timeout| timeout}
-          timeout =
-            if earliest_timeout.nil?
-              nil    # no element in @waitings, thus do IO.select forever.
-            elsif earliest_timeout < Process.clock_gettime(Process::CLOCK_MONOTONIC)
-              break  # handle an event in @waitings first.
+      while !@waitings.empty? || !@blockings.empty? || !@input_waitings.empty? || !@output_waitings.empty? || !@input_waitings_with_timeout.empty?
+        while !@input_waitings.empty? || !@output_waitings.empty? || !@input_waitings_with_timeout.empty?
+          waitings_earliest_timeout = @waitings.empty? ? nil : @waitings.min_by{|fiber, timeout| timeout}[1]
+          input_waitings_timeout = @input_waitings_with_timeout.empty? ? nil : @input_waitings_with_timeout.min_by{|io, (fiber, timeout)| timeout}[1][1]
+
+          earliest_timeout =
+            if waitings_earliest_timeout && input_waiting_timeout
+              [waitings_earliest_timeout, input_waitings_timeout].min
             else
-              earliest_timeout - Process.clock_gettime(Process::CLOCK_MONOTONIC) # See the note below.
+              waitings_earliest_timeout || input_waitings_timeout
             end
 
+          break if earliest_timeout && (earliest_timeout < Process.clock_gettime(Process::CLOCK_MONOTONIC))
+
+          select_time = earliest_timeout.nil? ? nil : (earliest_timeout - Process.clock_gettime(Process::CLOCK_MONOTONIC))
           # NOTE: IO.select will keep blocking until timeout even if any new event is added to @waitings.
           # TODO: Don't wait for the input  ready when the corresponding fiber gets terminated, and when it is the only one in @input_waitings.
           # TODO: Don't wait for the output ready when the corresponding fiber gets terminated, and when it is the only one in @output_waitings.
-          inputs_ready, outputs_ready = IO.select(@input_waitings.keys, @output_waitings.keys, [], timeout)
+          inputs_ready, outputs_ready = IO.select(@input_waitings.keys + @input_waitings_with_timeout.keys, @output_waitings.keys, [], select_time)
 
           inputs_ready&.each do |input|
-            fiber_non_blocking = @input_waitings.delete(input)
-            fiber_non_blocking.resume if fiber_non_blocking.alive?
+            if @input_waitings[input]
+              fiber_non_blocking = @input_waitings.delete(input)
+              fiber_non_blocking.resume if fiber_non_blocking.alive?
+            elsif @input_waitings_with_timeout[input]
+              fiber = @input_waitings_with_timeout.delete(input)[0]
+              fiber.resume if fiber.alive?
+            else
+              raise
+            end
           end
+
+          current_clock_monotonic_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          @input_waitings_with_timeout\
+            &.reject!{|_io, (_fiber, timeout)| timeout <= current_clock_monotonic_time}
+            &.each{|_io, (fiber, _timeout)| fiber.resume if fiber.alive?}
 
           outputs_ready&.each do |output|
             fiber_non_blocking = @output_waitings.delete(output)
@@ -138,6 +155,7 @@ module AsyncScheduler
           @waitings.reject!{|fiber, _timeout| resumable_fibers.include? fiber}
         end
 
+        # Unfortunately, current scheduler is unfair to @blockings. Even if any of @blockings is ready, current scheduler has no way to notice it.
         @blockings.select!{|fiber| fiber.alive?}
       end
     end
@@ -250,8 +268,34 @@ module AsyncScheduler
     # Invoked by any method that performs a non-reverse DNS lookup. (e.g. Addrinfo.getaddrinfo)
     # The method is expected to return an array of strings corresponding to ip addresses the hostname is resolved to, or nil if it can not be resolved.
     def address_resolve(hostname)
-      # TODO
-      return ["1.2.3.4", "5.6.7.8"]
+      # Q1. Should I remove this fiber?
+      # Q2. In this fiber, it loops. So I have to loop around this fiber.
+      fiber = ::Nonblocking::Resolv.getaddresses_fiber(hostname)
+      socks, timeout = fiber.resume
+
+      loop do
+        # Assuming here that socks.length is 1 in resolv gem.
+        # If there are multiple sockets, it gets complicated.
+        # For example, if there are two sockets, @input_waitings should be like this:
+        # { first_socket => Fiber.current, second_socket => Fiber.current }
+        # In this case, when first socket is ready in #close, Fiber.current is resumed and can be terminated.
+        # If we don't remove the second socket from @input_waitings, when second socket is ready, Fiber.current is resumed again, and it raises FiberError (attempt to resume a terminated fiber).
+        raise if 1 < socks.length
+
+        socks.each do |sock|
+          if timeout
+            @input_waitings_with_timeout[sock] = [Fiber.current, timeout]
+          else
+            @input_waitings[sock] = Fiber.current
+          end
+        end
+
+        Fiber.yield
+        result = fiber.resume
+        return result unless fiber.alive?
+
+        socks, timeout = result
+      end
     end
   end
 end
