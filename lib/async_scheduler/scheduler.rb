@@ -127,7 +127,7 @@ module AsyncScheduler
           end
 
           current_clock_monotonic_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-          @input_waitings_with_timeout\
+          @input_waitings_with_timeout
             &.reject!{|_io, (_fiber, timeout)| timeout <= current_clock_monotonic_time}
             &.each{|_io, (fiber, _timeout)| fiber.resume if fiber.alive?}
 
