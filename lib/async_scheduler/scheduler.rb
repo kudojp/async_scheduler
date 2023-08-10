@@ -1,6 +1,6 @@
 require 'set'
-require_relative './cross_thread_usage_detector'
 require 'nonblocking/resolv'
+require_relative './cross_thread_usage_detector'
 
 module AsyncScheduler
   # This class implements Fiber::SchedulerInterface.
