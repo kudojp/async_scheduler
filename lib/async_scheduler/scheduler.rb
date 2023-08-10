@@ -105,23 +105,14 @@ module AsyncScheduler
 
       while !@waitings.empty? || !@blockings.empty? || !@input_waitings.empty? || !@output_waitings.empty? || !@input_waitings_with_timeout.empty?
         while !@input_waitings.empty? || !@output_waitings.empty? || !@input_waitings_with_timeout.empty?
-          waitings_earliest_timeout = @waitings.empty? ? nil : @waitings.min_by{|fiber, timeout| timeout}[1]
-          input_waitings_timeout = @input_waitings_with_timeout.empty? ? nil : @input_waitings_with_timeout.min_by{|io, (fiber, timeout)| timeout}[1][1]
+          soonest_timeout_ = self.soonest_timeout
+          select_duration = soonest_timeout_.nil? ? nil : (soonest_timeout_ - Process.clock_gettime(Process::CLOCK_MONOTONIC))
+          break if select_duration <= 0
 
-          earliest_timeout =
-            if waitings_earliest_timeout && input_waiting_timeout
-              [waitings_earliest_timeout, input_waitings_timeout].min
-            else
-              waitings_earliest_timeout || input_waitings_timeout
-            end
-
-          break if earliest_timeout && (earliest_timeout < Process.clock_gettime(Process::CLOCK_MONOTONIC))
-
-          select_time = earliest_timeout.nil? ? nil : (earliest_timeout - Process.clock_gettime(Process::CLOCK_MONOTONIC))
           # NOTE: IO.select will keep blocking until timeout even if any new event is added to @waitings.
           # TODO: Don't wait for the input  ready when the corresponding fiber gets terminated, and when it is the only one in @input_waitings.
           # TODO: Don't wait for the output ready when the corresponding fiber gets terminated, and when it is the only one in @output_waitings.
-          inputs_ready, outputs_ready = IO.select(@input_waitings.keys + @input_waitings_with_timeout.keys, @output_waitings.keys, [], select_time)
+          inputs_ready, outputs_ready = IO.select(@input_waitings.keys + @input_waitings_with_timeout.keys, @output_waitings.keys, [], select_duration)
 
           inputs_ready&.each do |input|
             if @input_waitings[input]
@@ -159,6 +150,18 @@ module AsyncScheduler
         @blockings.select!{|fiber| fiber.alive?}
       end
     end
+
+    def soonest_timeout
+      waitings_earliest_timeout = @waitings.empty? ? nil : @waitings.min_by{|fiber, timeout| timeout}[1]
+      input_waitings_timeout = @input_waitings_with_timeout.empty? ? nil : @input_waitings_with_timeout.min_by{|io, (fiber, timeout)| timeout}[1][1]
+
+      if waitings_earliest_timeout && input_waiting_timeout
+        return [waitings_earliest_timeout, input_waitings_timeout].min
+      end
+
+      waitings_earliest_timeout || input_waitings_timeout
+    end
+    private :soonest_timeout
 
     # Invoked by IO#wait, IO#wait_readable, IO#wait_writable to ask whether the specified descriptor is ready for specified events within the specified timeout.
     # events is a bit mask of IO::READABLE, IO::WRITABLE, and IO::PRIORITY.
