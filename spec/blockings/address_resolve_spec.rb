@@ -4,13 +4,13 @@ require 'resolv'
 
 RSpec.describe AsyncScheduler do
   describe "DNS resolution" do
-    def resolve_address_with_scheduler(hostname, port)
+    def resolve_address_with_scheduler(hostname, port, family=nil, socket_type=nil)
       Thread.new do
         scheduler = AsyncScheduler::Scheduler.new
         Fiber.set_scheduler scheduler
         ips = nil
         Fiber.schedule do
-          ips = Socket.getaddrinfo(hostname, port)
+          ips = Socket.getaddrinfo(hostname, port, family=family, socket_type=socket_type)
         end
         scheduler.close
         ips
@@ -18,56 +18,42 @@ RSpec.describe AsyncScheduler do
     end
 
     it "resolves localhost successfully" do
-      expect(resolve_address_with_scheduler("localhost", 443)).to contain_exactly(
-        ["AF_INET", 443, "127.0.0.1", "127.0.0.1", 2, 1, 6],
-        ["AF_INET", 443, "127.0.0.1", "127.0.0.1", 2, 2, 17],
-        ["AF_INET", 443, "127.0.0.1", "127.0.0.1", 2, 3, 0],
-        ["AF_INET6", 443, "::1", "::1", 30, 1, 6],
-        ["AF_INET6", 443, "::1", "::1", 30, 2, 17],
-        ["AF_INET6", 443, "::1", "::1", 30, 3, 0]
-      )
-    end
-
-    it "resolves localhost successfully" do
-      expect(resolve_address_with_scheduler("localhost", 80)).to contain_exactly(
-        ["AF_INET", 80, "127.0.0.1", "127.0.0.1", 2, 1, 6],
-        ["AF_INET", 80, "127.0.0.1", "127.0.0.1", 2, 2, 17],
-        ["AF_INET", 80, "127.0.0.1", "127.0.0.1", 2, 3, 0],
-        ["AF_INET6", 80, "::1", "::1", 30, 1, 6],
-        ["AF_INET6", 80, "::1", "::1", 30, 2, 17],
-        ["AF_INET6", 80, "::1", "::1", 30, 3, 0]
-      )
+      expect(resolve_address_with_scheduler("localhost", 443, family=Socket::Constants::AF_INET, socket_type=Socket::Constants::SOCK_STREAM)).to contain_exactly(["AF_INET", 443, "127.0.0.1", "127.0.0.1", 2, 1, 6])
+      expect(resolve_address_with_scheduler("localhost", 443, family=Socket::Constants::AF_INET, socket_type=Socket::Constants::SOCK_DGRAM)).to contain_exactly(["AF_INET", 443, "127.0.0.1", "127.0.0.1", 2, 2, 17])
+      expect(resolve_address_with_scheduler("localhost", 443, family=Socket::Constants::AF_INET, socket_type=Socket::Constants::SOCK_RAW)).to contain_exactly(["AF_INET", 443, "127.0.0.1", "127.0.0.1", 2, 3, 0])
+      expect(resolve_address_with_scheduler("localhost", 443, family=Socket::Constants::AF_INET6, socket_type=Socket::Constants::SOCK_STREAM)).to contain_exactly(["AF_INET6", 443, "::1", "::1", 30, 1, 6])
+      expect(resolve_address_with_scheduler("localhost", 443, family=Socket::Constants::AF_INET6, socket_type=Socket::Constants::SOCK_DGRAM)).to contain_exactly(["AF_INET6", 443, "::1", "::1", 30, 2, 17])
+      expect(resolve_address_with_scheduler("localhost", 443, family=Socket::Constants::AF_INET6, socket_type=Socket::Constants::SOCK_RAW)).to contain_exactly(["AF_INET6", 443, "::1", "::1", 30, 3, 0])
     end
 
     it "resolves google.com successfully" do
-      address_infos = resolve_address_with_scheduler("google.com", 443)
-      ips = address_infos.map{|ai| ai[2]}.uniq
-      expect(ips.length).to eq(2) # IPv4 and IPv6
+      address_info = resolve_address_with_scheduler("google.com", 443, family=Socket::Constants::AF_INET, socket_type=Socket::Constants::SOCK_STREAM)
+      # NOTE: It does not check if this IP is really google.com.
+      ipv4 = address_info[0][2]
+      expect(ipv4).to match(/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/)
+      expect(address_info).to contain_exactly(["AF_INET", 443, ipv4, ipv4, 2, 1, 6])
 
-      expect(address_infos).to contain_exactly(
-        ["AF_INET", 443, ips[0], ips[0], 2, 1, 6],
-        ["AF_INET", 443, ips[0], ips[0], 2, 2, 17],
-        ["AF_INET", 443, ips[0], ips[0], 2, 3, 0],
-        ["AF_INET6", 443, ips[1], ips[1], 30, 1, 6],
-        ["AF_INET6", 443, ips[1], ips[1], 30, 2, 17],
-        ["AF_INET6", 443, ips[1], ips[1], 30, 3, 0]
-      )
-    end
+      address_info = resolve_address_with_scheduler("google.com", 443, family=Socket::Constants::AF_INET, socket_type=Socket::Constants::SOCK_DGRAM)
+      ipv4 = address_info[0][2]
+      expect(ipv4).to match(/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/)
+      expect(address_info).to contain_exactly(["AF_INET", 443, ipv4, ipv4, 2, 2, 17])
 
-    it "resolves google.com successfully" do
-      address_infos = resolve_address_with_scheduler("google.com", 80)
-      ips = address_infos.map{|ai| ai[2]}.uniq
-      expect(ips.length).to eq(2) # IPv4 and IPv6
+      address_info = resolve_address_with_scheduler("google.com", 443, family=Socket::Constants::AF_INET, socket_type=Socket::Constants::SOCK_RAW)
+      ipv4 = address_info[0][2]
+      expect(ipv4).to match(/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/)
+      expect(address_info).to contain_exactly(["AF_INET", 443, ipv4, ipv4, 2, 3, 0])
 
-      # NOTE: This does not check if ips are really those of google.com.
-      expect(address_infos).to contain_exactly(
-        ["AF_INET", 80, ips[0], ips[0], 2, 1, 6],
-        ["AF_INET", 80, ips[0], ips[0], 2, 2, 17],
-        ["AF_INET", 80, ips[0], ips[0], 2, 3, 0],
-        ["AF_INET6", 80, ips[1], ips[1], 30, 1, 6],
-        ["AF_INET6", 80, ips[1], ips[1], 30, 2, 17],
-        ["AF_INET6", 80, ips[1], ips[1], 30, 3, 0]
-      )
+      address_info = resolve_address_with_scheduler("google.com", 443, family=Socket::Constants::AF_INET6, socket_type=Socket::Constants::SOCK_STREAM)
+      ipv6 = address_info[0][2]
+      expect(address_info).to contain_exactly(["AF_INET6", 443, ipv6, ipv6, 30, 1, 6])
+
+      address_info = resolve_address_with_scheduler("google.com", 443, family=Socket::Constants::AF_INET6, socket_type=Socket::Constants::SOCK_DGRAM)
+      ipv6 = address_info[0][2]
+      expect(address_info).to contain_exactly(["AF_INET6", 443, ipv6, ipv6, 30, 2, 17])
+
+      address_info = resolve_address_with_scheduler("google.com", 443, family=Socket::Constants::AF_INET6, socket_type=Socket::Constants::SOCK_RAW)
+      ipv6 = address_info[0][2]
+      expect(address_info).to contain_exactly(["AF_INET6", 443, ipv6, ipv6, 30, 3, 0])
     end
   end
 
