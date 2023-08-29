@@ -120,6 +120,11 @@ module AsyncScheduler
               fiber_non_blocking.resume if fiber_non_blocking.alive?
             elsif @input_waitings_with_timeout[input]
               fiber = @input_waitings_with_timeout.delete(input)[0]
+              # NOTE: It is possible that current fiber is blocked by multiple sockets in this way:
+              #       { first_socket => Fiber.current, second_socket => Fiber.current }
+              # In this case, when first_socket is ready, both of `first_socket` key and `second_socket` must be removed before the fiber gets resumed.
+              # Otherwise, when second_socket is ready, the fiber will be resumed again unexpectedly.
+              @input_waitings_with_timeout.reject!{|_io, (_resumable_fiber, _timeout)| _resumable_fiber == fiber}
               fiber.resume if fiber.alive?
             else
               raise
@@ -274,18 +279,13 @@ module AsyncScheduler
       # Q1. Should I remove this fiber?
       # Q2. In this fiber, it loops. So I have to loop around this fiber.
       fiber = ::Nonblocking::Resolv.getaddresses_fiber(hostname)
-      socks, timeout = fiber.resume
-
       loop do
-        # Assuming here that socks.length is 1 in resolv gem.
-        # If there are multiple sockets, it gets complicated.
-        # For example, if there are two sockets, @input_waitings should be like this:
-        # { first_socket => Fiber.current, second_socket => Fiber.current }
-        # In this case, when first socket is ready in #close, Fiber.current is resumed and can be terminated.
-        # If we don't remove the second socket from @input_waitings, when second socket is ready, Fiber.current is resumed again, and it raises FiberError (attempt to resume a terminated fiber).
-        raise if 1 < socks.length
+        result = fiber.resume
+        return result unless fiber.alive?
 
+        socks, timeout = result
         socks.each do |sock|
+          # NOTE: It is possible that current fiber is blocked by multiple sockets. In this case, the fiber can be resumed when either of them is ready.
           if timeout
             @input_waitings_with_timeout[sock] = [Fiber.current, timeout]
           else
@@ -294,10 +294,6 @@ module AsyncScheduler
         end
 
         Fiber.yield
-        result = fiber.resume
-        return result unless fiber.alive?
-
-        socks, timeout = result
       end
     end
   end
