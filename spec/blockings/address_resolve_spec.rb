@@ -32,31 +32,37 @@ RSpec.describe AsyncScheduler do
     end
 
     it "resolves google.com successfully" do
+      puts "#### Resolving!!! google.com, 443, family=Socket::Constants::AF_INET, socket_type=Socket::Constants::SOCK_STREAM"
       address_info = resolve_address_with_scheduler("google.com", 443, family=Socket::Constants::AF_INET, socket_type=Socket::Constants::SOCK_STREAM)
       # NOTE: It does not check if this IP is really google.com.
       ipv4 = address_info[0][2]
       expect(ipv4).to match(/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/)
       expect(address_info).to include(["AF_INET", 443, ipv4, ipv4, 2, 1, 6])
 
+      puts "#### Resolving!!! google.com, 443, family=Socket::Constants::AF_INET, socket_type=Socket::Constants::SOCK_DGRAM"
       address_info = resolve_address_with_scheduler("google.com", 443, family=Socket::Constants::AF_INET, socket_type=Socket::Constants::SOCK_DGRAM)
       ipv4 = address_info[0][2]
       expect(ipv4).to match(/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/)
       expect(address_info).to include(["AF_INET", 443, ipv4, ipv4, 2, 2, 17])
 
+      puts "#### Resolving!!! google.com, 443, family=Socket::Constants::AF_INET, socket_type=Socket::Constants::SOCK_RAW"
       address_info = resolve_address_with_scheduler("google.com", 443, family=Socket::Constants::AF_INET, socket_type=Socket::Constants::SOCK_RAW)
       ipv4 = address_info[0][2]
       expect(ipv4).to match(/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/)
       expect(address_info).to include(["AF_INET", 443, ipv4, ipv4, 2, 3, 0])
 
+      puts "#### Resolving!!! google.com, 443, family=Socket::Constants::AF_INET6, socket_type=Socket::Constants::SOCK_STREAM"
       address_info = resolve_address_with_scheduler("google.com", 443, family=Socket::Constants::AF_INET6, socket_type=Socket::Constants::SOCK_STREAM)
       ipv6 = address_info[0][2]
       # NOTE: there could be multiple resolved IPv6 addresses.
       expect(address_info).to include(["AF_INET6", 443, ipv6, ipv6, Socket::Constants::AF_INET6, 1, 6])
 
+      puts "#### Resolving!!! google.com, 443, family=Socket::Constants::AF_INET6, socket_type=Socket::Constants::SOCK_DGRAM"
       address_info = resolve_address_with_scheduler("google.com", 443, family=Socket::Constants::AF_INET6, socket_type=Socket::Constants::SOCK_DGRAM)
       ipv6 = address_info[0][2]
       expect(address_info).to include(["AF_INET6", 443, ipv6, ipv6, Socket::Constants::AF_INET6, 2, 17])
 
+      puts "#### Resolving!!! google.com, 443, family=Socket::Constants::AF_INET6, socket_type=Socket::Constants::SOCK_RAW"
       address_info = resolve_address_with_scheduler("google.com", 443, family=Socket::Constants::AF_INET6, socket_type=Socket::Constants::SOCK_RAW)
       ipv6 = address_info[0][2]
       expect(address_info).to include(["AF_INET6", 443, ipv6, ipv6, Socket::Constants::AF_INET6, 3, 0])
