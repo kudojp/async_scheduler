@@ -12,7 +12,11 @@ Gem::Specification.new do |spec|
   spec.description = "This is a task scheduler which implements the FiberScheduler interface"
   spec.homepage = "https://github.com/kudojp/async_scheduler"
   spec.license = "MIT"
-  spec.required_ruby_version = ">= 3.0.0"
+  # The interface of FiberScheduler#io_read had a breaking change from Ruby 3.0 to 3.1.
+  # - Ruby 3.0: #io_read takes 4 arguments.
+  # - Ruby 3.1: #io_read takes 3 arguments.
+  # The implementation of scheduler#io_read in this gem takes only 3 arguments.
+  spec.required_ruby_version = "~> 3.1.0"
 
   spec.metadata["allowed_push_host"] = "TODO: Set to your gem server 'https://example.com'"
 
