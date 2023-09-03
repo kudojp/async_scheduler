@@ -18,12 +18,17 @@ RSpec.describe AsyncScheduler do
     end
 
     it "resolves localhost successfully" do
+      # NOTE:
+      # Value of Socket::Constants::AF_INET6 seems to differ according to the OS.
+      # - Linux: 10
+      # - MacOS: 30
+      # Thus, it is not hard-coded in tests below.
       expect(resolve_address_with_scheduler("localhost", 443, family=Socket::Constants::AF_INET, socket_type=Socket::Constants::SOCK_STREAM)).to contain_exactly(["AF_INET", 443, "127.0.0.1", "127.0.0.1", 2, 1, 6])
       expect(resolve_address_with_scheduler("localhost", 443, family=Socket::Constants::AF_INET, socket_type=Socket::Constants::SOCK_DGRAM)).to contain_exactly(["AF_INET", 443, "127.0.0.1", "127.0.0.1", 2, 2, 17])
       expect(resolve_address_with_scheduler("localhost", 443, family=Socket::Constants::AF_INET, socket_type=Socket::Constants::SOCK_RAW)).to contain_exactly(["AF_INET", 443, "127.0.0.1", "127.0.0.1", 2, 3, 0])
-      expect(resolve_address_with_scheduler("localhost", 443, family=Socket::Constants::AF_INET6, socket_type=Socket::Constants::SOCK_STREAM)).to contain_exactly(["AF_INET6", 443, "::1", "::1", 30, 1, 6])
-      expect(resolve_address_with_scheduler("localhost", 443, family=Socket::Constants::AF_INET6, socket_type=Socket::Constants::SOCK_DGRAM)).to contain_exactly(["AF_INET6", 443, "::1", "::1", 30, 2, 17])
-      expect(resolve_address_with_scheduler("localhost", 443, family=Socket::Constants::AF_INET6, socket_type=Socket::Constants::SOCK_RAW)).to contain_exactly(["AF_INET6", 443, "::1", "::1", 30, 3, 0])
+      expect(resolve_address_with_scheduler("localhost", 443, family=Socket::Constants::AF_INET6, socket_type=Socket::Constants::SOCK_STREAM)).to contain_exactly(["AF_INET6", 443, "::1", "::1", Socket::Constants::AF_INET6, 1, 6])
+      expect(resolve_address_with_scheduler("localhost", 443, family=Socket::Constants::AF_INET6, socket_type=Socket::Constants::SOCK_DGRAM)).to contain_exactly(["AF_INET6", 443, "::1", "::1", Socket::Constants::AF_INET6, 2, 17])
+      expect(resolve_address_with_scheduler("localhost", 443, family=Socket::Constants::AF_INET6, socket_type=Socket::Constants::SOCK_RAW)).to contain_exactly(["AF_INET6", 443, "::1", "::1", Socket::Constants::AF_INET6, 3, 0])
     end
 
     it "resolves google.com successfully" do
@@ -45,15 +50,15 @@ RSpec.describe AsyncScheduler do
 
       address_info = resolve_address_with_scheduler("google.com", 443, family=Socket::Constants::AF_INET6, socket_type=Socket::Constants::SOCK_STREAM)
       ipv6 = address_info[0][2]
-      expect(address_info).to contain_exactly(["AF_INET6", 443, ipv6, ipv6, 30, 1, 6])
+      expect(address_info).to contain_exactly(["AF_INET6", 443, ipv6, ipv6, Socket::Constants::AF_INET6, 1, 6])
 
       address_info = resolve_address_with_scheduler("google.com", 443, family=Socket::Constants::AF_INET6, socket_type=Socket::Constants::SOCK_DGRAM)
       ipv6 = address_info[0][2]
-      expect(address_info).to contain_exactly(["AF_INET6", 443, ipv6, ipv6, 30, 2, 17])
+      expect(address_info).to contain_exactly(["AF_INET6", 443, ipv6, ipv6, Socket::Constants::AF_INET6, 2, 17])
 
       address_info = resolve_address_with_scheduler("google.com", 443, family=Socket::Constants::AF_INET6, socket_type=Socket::Constants::SOCK_RAW)
       ipv6 = address_info[0][2]
-      expect(address_info).to contain_exactly(["AF_INET6", 443, ipv6, ipv6, 30, 3, 0])
+      expect(address_info).to contain_exactly(["AF_INET6", 443, ipv6, ipv6, Socket::Constants::AF_INET6, 3, 0])
     end
   end
 
