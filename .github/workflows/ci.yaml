@@ -24,3 +24,17 @@ jobs:
       - uses: codecov/codecov-action@v1
         with:
           file: ./coverage/coverage.xml
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        ruby: ['3.1']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true # runs 'bundle install' and caches installed gems automatically
+      - uses: actions/checkout@v3
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
