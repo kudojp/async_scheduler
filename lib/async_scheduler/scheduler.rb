@@ -129,18 +129,18 @@ module AsyncScheduler
               fiber_non_blocking.resume if fiber_non_blocking.alive?
             elsif @blocking_sockets[input]
               fiber = @blocking_sockets.delete(input)
-              @fiber_to_all_blocker_sockets.fetch(fiber).delete(input)
-              fiber.resume if @fiber_to_all_blocker_sockets.fetch(fiber).empty?
-              # NOTE: It is possible that current fiber is blocked by multiple sockets in this way:
-              #       { first_socket => Fiber.current, second_socket => Fiber.current }
-              # In this case, when first_socket is ready, both of `first_socket` key and `second_socket` must be removed before the fiber gets resumed.
-              # Otherwise, when second_socket is ready, the fiber will be resumed again unexpectedly.
-            elsif @blocking_sockets_with_timeout[input]
-              fiber = @blocking_sockets_with_timeout.delete(input)[0]
-              @fiber_to_all_blocker_sockets.fetch(fiber).delete(input)
-              if @fiber_to_all_blocker_sockets[fiber].empty?
-                fiber.resume
+              # ref. comment in #address_resolve
+              @fiber_to_all_blocker_sockets.fetch(fiber).each do |socket|
+                @blocking_sockets.delete(socket)
               end
+              fiber.resume
+            elsif @blocking_sockets_with_timeout[input]
+              fiber, _timeout = @blocking_sockets_with_timeout.delete(input)
+              # ref. comment in #address_resolve
+              @fiber_to_all_blocker_sockets.fetch(fiber).each do |socket|
+                @blocking_sockets_with_timeout.delete(socket)
+              end
+              fiber.resume
             else
               raise
             end
@@ -297,18 +297,28 @@ module AsyncScheduler
     # The method is expected to return an array of strings corresponding to ip addresses the hostname is resolved to, or nil if it can not be resolved.
     def address_resolve(hostname)
       validate_used_in_original_thread!
-      # Q1. Should I remove this fiber?
-      # Q2. In this fiber, it loops. So I have to loop around this fiber.
       fiber = ::Nonblocking::Resolv.getaddresses_fiber(hostname)
+      # Fiber.yield inside of this fiber is located in the loop and may be called multiple times.
+      # So here in the caller, the fiber has to be resumed multiple times till the fiber becomes terminated.
       loop do
         result = fiber.resume
         return result unless fiber.alive?
 
         socks, timeout = result
+        # In my experiment, socks here are:
+        # - socket to connect to the DNS server which has IPv4 address
+        # - socket to connect to the DNS server which has IPv6 address
+        # When either of these is ready, DNS resolution is done.
         socks.each do |sock|
           if timeout
+            # Same as below.
             @blocking_sockets_with_timeout[sock] = [Fiber.current, timeout]
           else
+            # The current fiber is blocked by multiple sockets in this way:
+            # blocking_sockets = { first_socket => Fiber.current, second_socket => Fiber.current }
+            # If first_socket is ready, both of `first_socket` key and `second_socket` must be removed before the fiber gets resumed.
+            # Otherwise, when second_socket is ready, the fiber will be resumed again unexpectedly.
+            # Same thing can be said if second_socket is ready first.
             @blocking_sockets[sock] = Fiber.current
           end
           @fiber_to_all_blocker_sockets[Fiber.current] << sock
