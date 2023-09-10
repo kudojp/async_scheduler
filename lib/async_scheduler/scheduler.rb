@@ -294,6 +294,11 @@ module AsyncScheduler
     # Invoked by any method that performs a non-reverse DNS lookup. (e.g. Addrinfo.getaddrinfo)
     # The method is expected to return an array of strings corresponding to ip addresses the hostname is resolved to, or nil if it can not be resolved.
     def address_resolve(hostname)
+      # NOTE:
+      # Asynchronous DNS lookup is slower than sequential DNS lookup in a single thread in my experiment.
+      # Remove #address_resolve when this scheduler is used in a performance critical application.
+      # Run $ `bundle exec rspec spec/blockings/address_resolve_spec.rb` to confirm it.
+
       validate_used_in_original_thread!
       fiber = ::Nonblocking::Resolv.getaddresses_fiber(hostname)
       # Fiber.yield inside of this fiber is located in the loop and may be called multiple times.
