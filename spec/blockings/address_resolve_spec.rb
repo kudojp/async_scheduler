@@ -22,8 +22,8 @@ RSpec.describe AsyncScheduler do
     it "resolves localhost successfully" do
       # NOTE:
       # Value of Socket::Constants::AF_INET6 seems to differ according to the OS.
-      # - Linux: 10
-      # - MacOS: 30
+      # - Ubuntu: 10
+      # - MacOS:  30
       # Thus, it is not hard-coded in tests below.
       puts "#### Resolving (localhost, 443)"
       expect(resolve_address_with_scheduler("localhost", 443)).to contain_exactly(
@@ -154,9 +154,9 @@ RSpec.describe AsyncScheduler do
 
         [1, 10, 100].each do |num_times|
           puts "## Resolving #{num_times} times:"
-          puts "Resolve with scheduler:    #{resolve_address_with_scheduler(hostname, 443, num_times)}"
+          puts "Resolve with scheduler:                  #{resolve_address_with_scheduler(hostname, 443, num_times)}"
           puts "Revolve sequentially in a single thread: #{resolve_address_sequentially(hostname, 443, num_times)}"
-          puts "Resolve with multithreads: #{resolve_address_with_multithreads(hostname, 443, num_times)}"
+          puts "Resolve with multithreads:               #{resolve_address_with_multithreads(hostname, 443, num_times)}"
           puts
         end
       end
