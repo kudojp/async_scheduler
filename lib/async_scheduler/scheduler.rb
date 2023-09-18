@@ -1,4 +1,5 @@
 require 'set'
+require 'resolv_fiber'
 require_relative './cross_thread_usage_detector'
 
 module AsyncScheduler
@@ -10,7 +11,7 @@ module AsyncScheduler
     def initialize
       set_belonging_thread!
 
-      # (key, value) = (Fiber object, timeout[not nil])
+      # (key, value) = (Fiber object, timeout<not nil>)
       @waitings = {}
       # (key, value) = (blocking io, Fiber object)
       @input_waitings = {}
@@ -18,6 +19,10 @@ module AsyncScheduler
       # Fibers which are blocking and whose timeouts are not determined.
       # e.g. Fiber which includes sleep()
       @blockings = Set.new()
+      # (key, value) = (socket, Hash{:blocked_fiber => <Fiber object>, :timeout => <timeout>})
+      @blocking_sockets = {}
+      # NOTE: When either of the sockets(value) is ready, the fiber(key) can be resumed.
+      @fiber_to_all_blocker_sockets = Hash.new{|h, fiber| h[fiber] = Set.new}
     end
 
     # Implementation of the Fiber.schedule.
@@ -100,27 +105,53 @@ module AsyncScheduler
     def close
       validate_used_in_original_thread!
 
-      while !@waitings.empty? || !@blockings.empty? || !@input_waitings.empty? || !@output_waitings.empty?
-        while !@input_waitings.empty? || !@output_waitings.empty?
-          # TODO: Use a min heap for @waitings
-          _, earliest_timeout = @waitings.min_by{|fiber, timeout| timeout}
-          timeout =
-            if earliest_timeout.nil?
-              nil    # no element in @waitings, thus do IO.select forever.
-            elsif earliest_timeout < Process.clock_gettime(Process::CLOCK_MONOTONIC)
-              break  # handle an event in @waitings first.
+      while !@waitings.empty? || !@blockings.empty? || !@input_waitings.empty? || !@output_waitings.empty? || !@blocking_sockets.empty?
+        # For blocking I/Os...
+        while !@input_waitings.empty? || !@output_waitings.empty? || !@blocking_sockets.empty?
+          soonest_timeout_ = self.soonest_timeout
+          select_duration =
+            if soonest_timeout_.nil?
+              nil
             else
-              earliest_timeout - Process.clock_gettime(Process::CLOCK_MONOTONIC) # See the note below.
+              duration = soonest_timeout_ - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+              # duration here should be very close to 0 even if it is negative.
+              [duration, 0].max
             end
 
           # NOTE: IO.select will keep blocking until timeout even if any new event is added to @waitings.
           # TODO: Don't wait for the input  ready when the corresponding fiber gets terminated, and when it is the only one in @input_waitings.
           # TODO: Don't wait for the output ready when the corresponding fiber gets terminated, and when it is the only one in @output_waitings.
-          inputs_ready, outputs_ready = IO.select(@input_waitings.keys, @output_waitings.keys, [], timeout)
+          inputs_ready, outputs_ready = IO.select(
+            @input_waitings.keys + @blocking_sockets.keys,
+            @output_waitings.keys,
+            [],
+            select_duration
+          )
 
           inputs_ready&.each do |input|
-            fiber_non_blocking = @input_waitings.delete(input)
-            fiber_non_blocking.resume if fiber_non_blocking.alive?
+            if @input_waitings[input]
+              fiber_non_blocking = @input_waitings.delete(input)
+              fiber_non_blocking.resume if fiber_non_blocking.alive?
+            elsif @blocking_sockets[input]
+              fiber = @blocking_sockets.delete(input).fetch(:blocked_fiber)
+              # ref. comment in #address_resolve
+              @fiber_to_all_blocker_sockets.fetch(fiber).each do |socket|
+                @blocking_sockets.delete(socket)
+              end
+              fiber.resume
+            else
+              raise
+            end
+          end
+
+          current_clock_monotonic_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+          timeout_sockets = @blocking_sockets.select{|socket, blocked| blocked.fetch(:timeout) && (blocked.fetch(:timeout) <= current_clock_monotonic_time)}.keys
+          # NOTE: timeout_sockets is nil when there is no rejected element.
+          @blocking_sockets.reject!{|socket| timeout_sockets&.include? socket}
+          timeout_sockets&.each do |socket|
+            @fiber_to_all_blocker_sockets.fetch(fiber).delete(socket)
+            fiber.resume if @fiber_to_all_blocker_sockets.fetch(fiber).empty? && fiber.alive?
           end
 
           outputs_ready&.each do |output|
@@ -138,9 +169,22 @@ module AsyncScheduler
           @waitings.reject!{|fiber, _timeout| resumable_fibers.include? fiber}
         end
 
+        # Unfortunately, current scheduler is unfair to @blockings. Even if any of @blockings is ready, current scheduler has no way to notice it.
         @blockings.select!{|fiber| fiber.alive?}
       end
     end
+
+    def soonest_timeout
+      waitings_earliest_timeout = @waitings.empty? ? nil : @waitings.min_by{|fiber, timeout| timeout}[1]
+      blocking_socket_earliest_timeout = @blocking_sockets.select{|_socket, blocked| blocked.fetch(:timeout)}.values.min_by{|blocked| blocked.fetch(:timeout)}[0]&.fetch(:timeout)
+
+      if waitings_earliest_timeout && blocking_socket_earliest_timeout
+        return [waitings_earliest_timeout, blocking_socket_earliest_timeout].min
+      end
+
+      waitings_earliest_timeout || blocking_socket_earliest_timeout
+    end
+    private_methods :soonest_timeout
 
     # Invoked by IO#wait, IO#wait_readable, IO#wait_writable to ask whether the specified descriptor is ready for specified events within the specified timeout.
     # events is a bit mask of IO::READABLE, IO::WRITABLE, and IO::PRIORITY.
@@ -245,6 +289,48 @@ module AsyncScheduler
         end
       end
       return offset
+    end
+
+    # Invoked by any method that performs a non-reverse DNS lookup. (e.g. Addrinfo.getaddrinfo)
+    # The method is expected to return an array of strings corresponding to ip addresses the hostname is resolved to, or nil if it can not be resolved.
+    def address_resolve(hostname)
+      # NOTE:
+      # Asynchronous DNS lookup is slower than sequential DNS lookup in a single thread in my experiment.
+      # Remove #address_resolve when this scheduler is used in a performance critical application.
+      # Run $ `bundle exec rspec spec/blockings/address_resolve_spec.rb` to confirm it.
+
+      validate_used_in_original_thread!
+      fiber = ::ResolvFiber.getaddresses_fiber(hostname)
+      # Fiber.yield inside of this fiber is located in the loop and may be called multiple times.
+      # So here in the caller, the fiber has to be resumed multiple times till the fiber becomes terminated.
+      loop do
+        result = fiber.resume
+        return result unless fiber.alive?
+
+        socks, timeout = result
+        # In my experiment, socks here are:
+        # - socket to connect to the DNS server which has IPv4 address
+        # - socket to connect to the DNS server which has IPv6 address
+        # When either of these is ready, DNS resolution is done.
+        socks.each do |sock|
+          # Fiber.current is blocked by multiple sockets in this way:
+          #    @blocking_sockets = {
+          #       first_socket:  { blocked_fiber: Fiber.current, timeout: 1111 },
+          #       second_socket: { blocked_fiber: Fiber.current, timeout: 1111 },
+          #    }
+          # If first_socket is ready, both of `first_socket` and `second_socket` must be removed from @blocking_sockets before the fiber gets resumed.
+          # (@fiber_to_all_blocker_sockets is used to realize this.)
+          # Otherwise, when second_socket is ready, `Fiber.current` will be resumed again unexpectedly.
+          # Same thing can be said if second_socket is ready first.
+          @blocking_sockets[sock] = {
+            blocked_fiber: Fiber.current,
+            timeout: timeout,
+          }
+          @fiber_to_all_blocker_sockets[Fiber.current] << sock
+        end
+
+        Fiber.yield
+      end
     end
   end
 end
