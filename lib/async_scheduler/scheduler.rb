@@ -1,5 +1,5 @@
 require 'set'
-require 'nonblocking/resolv'
+require 'resolv_fiber'
 require_relative './cross_thread_usage_detector'
 
 module AsyncScheduler
@@ -300,7 +300,7 @@ module AsyncScheduler
       # Run $ `bundle exec rspec spec/blockings/address_resolve_spec.rb` to confirm it.
 
       validate_used_in_original_thread!
-      fiber = ::Nonblocking::Resolv.getaddresses_fiber(hostname)
+      fiber = ::ResolvFiber.getaddresses_fiber(hostname)
       # Fiber.yield inside of this fiber is located in the loop and may be called multiple times.
       # So here in the caller, the fiber has to be resumed multiple times till the fiber becomes terminated.
       loop do

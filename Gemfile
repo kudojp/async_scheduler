@@ -5,7 +5,7 @@ source "https://rubygems.org"
 # Specify your gem's dependencies in async_scheduler.gemspec
 gemspec
 # TODO: Move this to gemspec file. (I could not find a way to specify github gem in gemspec.)
-gem "nonblocking-resolv", :github => 'kudojp/nonblocking-resolv'
+gem "resolv_fiber", :github => 'kudojp/resolv_fiber'
 
 gem "rake", "~> 13.0"
 
