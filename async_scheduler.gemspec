@@ -18,7 +18,7 @@ Gem::Specification.new do |spec|
   # The implementation of scheduler#io_read in this gem takes only 3 arguments.
   spec.required_ruby_version = "~> 3.1.0"
 
-  spec.metadata["allowed_push_host"] = "TODO: Set to your gem server 'https://example.com'"
+  spec.metadata["allowed_push_host"] = "https://rubygems.org"
 
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = "https://github.com/kudojp/async_scheduler"
